@@ -83,8 +83,8 @@
     "showBurnRate": true,
     "contextWarnPercent": 60,
     "contextCritPercent": 85,
-    "costWarnUsd": 3,
-    "costCritUsd": 10
+    "costRateWarnUsdPerHr": 6,
+    "costRateCritUsdPerHr": 20
   },
 
   "git": {

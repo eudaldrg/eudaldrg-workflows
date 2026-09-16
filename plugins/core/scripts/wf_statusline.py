@@ -119,13 +119,13 @@ def build_line(payload: dict, merged: dict) -> str:
     cost = payload.get("cost", {})
     total_cost = cost.get("total_cost_usd")
     if total_cost is not None:
-        warn = cfg(merged, "statusLine.costWarnUsd", 3)
-        crit = cfg(merged, "statusLine.costCritUsd", 10)
-        cost_text = wrap(f"${total_cost:.2f}", color_for(total_cost, warn, crit))
+        cost_text = f"${total_cost:.2f}"
         duration_ms = cost.get("total_duration_ms") or 0
         if cfg(merged, "statusLine.showBurnRate", True) and duration_ms >= MIN_BURN_RATE_DURATION_MS:
+            warn = cfg(merged, "statusLine.costRateWarnUsdPerHr", 6)
+            crit = cfg(merged, "statusLine.costRateCritUsdPerHr", 20)
             rate = total_cost / (duration_ms / 3_600_000)
-            cost_text += f" (${rate:.2f}/hr)"
+            cost_text += f" ({wrap(f'${rate:.2f}/hr', color_for(rate, warn, crit))})"
         segments.append(cost_text)
 
     return " ".join(segments)
