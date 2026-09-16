@@ -1,0 +1,101 @@
+{
+  "version": 1,
+
+  "init": {
+    "sourceOfTruth": "AGENTS.md",
+    "toolFiles": ["CLAUDE.md"],
+    "optionalToolFiles": ["GEMINI.md", ".github/copilot-instructions.md"],
+    "neverTouch": [".cursorrules", ".windsurfrules", ".cursor/rules"],
+    "gitMoveHistory": true,
+    "stageChanges": true,
+    "commit": false,
+    "fallbackOnNoSymlinks": "stub",
+    "nestedAgentsMd": "leave",
+    "backupDir": ".claude/backup",
+    "maxFilesTouched": 20
+  },
+
+  "knowledge": {
+    "docsDir": "docs",
+    "consultShared": true
+  },
+
+  "plan": {
+    "format": "markdown",
+    "dir": ".claude/plans",
+    "runDir": ".claude/runs",
+    "filenamePattern": "{date}-{slug}.md",
+    "sections": ["context", "decisions", "tasks", "risks", "verification"]
+  },
+
+  "implement": {
+    "stopOnFirstFailure": true,
+    "checkTimeoutSeconds": 900,
+    "commitGranularity": "task",
+    "maxAttemptsPerTask": 3,
+    "finalFullCheck": true,
+    "checks": [
+      {
+        "id": "precommit",
+        "order": 30,
+        "cmd": "pre-commit run --all-files",
+        "scopedCmd": "pre-commit run --files {files}",
+        "when": "exists:.pre-commit-config.yaml",
+        "blocking": true
+      }
+    ]
+  },
+
+  "sessions": {
+    "transcriptsDir": "~/.claude/projects",
+    "aliases": {},
+    "excludePathPrefixes": ["/tmp/"],
+    "includeSubagents": true
+  },
+
+  "briefing": {
+    "since": "previous-working-day",
+    "format": "html",
+    "sources": ["sessions", "git", "gmail"],
+    "outDir": "~/.claude/briefings",
+    "openBrowser": true,
+    "recentCommitCount": 10
+  },
+
+  "autoLearn": {
+    "hook": { "enabled": false },
+    "minScore": 2,
+    "pendingFile": "learnings/pending.jsonl",
+    "maxCandidatesPerRun": 25
+  },
+
+  "cpp": {
+    "enabled": false,
+    "generatedFiles": [".clang-format", ".clang-tidy"],
+    "minClangFormatVersion": "18",
+    "driftCheck": "warn",
+    "clangFormat": { "overrides": {}, "unset": [] },
+    "clangTidy": { "checksAdd": [], "checksRemove": [], "options": {}, "scalars": {} }
+  },
+
+  "statusLine": {
+    "showGitBranch": true,
+    "showBurnRate": true,
+    "contextWarnPercent": 60,
+    "contextCritPercent": 85,
+    "costWarnUsd": 3,
+    "costCritUsd": 10
+  },
+
+  "git": {
+    "commitStyle": "conventional",
+    "branchPrefix": "feature/",
+    "forbiddenBranchPrefixes": ["chore/"],
+    "protectedBranches": ["main", "master"],
+    "askBeforePR": true,
+    "askBeforeMerge": true,
+    "askBeforePush": true
+  },
+
+  "projects": {}
+}

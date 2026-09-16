@@ -1,0 +1,29 @@
+{
+  "_doc": "Shared clang-tidy baseline. 'Checks' is emitted as an ordered, last-match-wins glob list: -* first, then every enable from all layers, then every disable from all layers. Enables-before-disables is deliberate — it guarantees a project's disable beats a base enable regardless of authoring order.",
+
+  "checksEnable": [
+    "bugprone-*",
+    "performance-*",
+    "modernize-*",
+    "readability-*",
+    "cppcoreguidelines-*",
+    "clang-analyzer-*"
+  ],
+
+  "checksDisable": [
+    "modernize-use-trailing-return-type",
+    "readability-magic-numbers",
+    "cppcoreguidelines-avoid-magic-numbers",
+    "cppcoreguidelines-non-private-member-variables-in-classes",
+    "cppcoreguidelines-avoid-c-arrays",
+    "modernize-use-nodiscard"
+  ],
+
+  "scalars": {
+    "WarningsAsErrors": "",
+    "HeaderFilterRegex": "^.*/(src|include)/.*",
+    "FormatStyle": "file"
+  },
+
+  "options": {}
+}

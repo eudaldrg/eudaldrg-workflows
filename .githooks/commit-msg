@@ -1,0 +1,3 @@
+#!/bin/sh
+# Installed via: git config core.hooksPath .githooks
+exec python3 "$(dirname "$0")/check_no_project_leaks.py" message "$1"

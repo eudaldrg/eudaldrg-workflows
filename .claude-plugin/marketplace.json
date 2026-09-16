@@ -1,0 +1,15 @@
+{
+  "name": "eudaldrg-workflows",
+  "owner": {
+    "name": "eudald",
+    "email": "eudald.rg@gmail.com"
+  },
+  "description": "Personal marketplace for coordinating LLM agent usage across projects.",
+  "plugins": [
+    {
+      "name": "core",
+      "source": "./plugins/core",
+      "description": "Core agents, skills, and commands for cross-project LLM workflow conventions."
+    }
+  ]
+}
