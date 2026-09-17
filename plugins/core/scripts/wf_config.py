@@ -291,6 +291,7 @@ ENUMS = {
     "briefing.format": {"markdown", "html"},
     "cpp.driftCheck": {"off", "warn", "block"},
     "git.commitStyle": {"conventional", "free"},
+    "autoLearn.mode": {"ask", "queue"},
 }
 
 TYPES = {

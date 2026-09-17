@@ -36,6 +36,9 @@ A rule that belongs everywhere goes to one of:
 | How a workflow skill should behave | the relevant `skills/<name>/SKILL.md` |
 | A convention for one other repo | that repo's `AGENTS.md` |
 
+The first two are `shared` scope (this plugin repo); the third is `local` scope, resolved to that
+specific repo. See "Propose, then ask" below for what each scope means for applying.
+
 **Check the target first.** `git.forbiddenBranchPrefixes` already encodes the `chore/` rule; proposing
 it again would be a duplicate that drifts. A promotion that is already done is the expected result, and
 saying so is a real answer.
@@ -81,7 +84,7 @@ Then classify:
 
 Record the rejects too, with which class they fell into, so the next run does not re-litigate them.
 
-## Propose, never apply
+## Propose, then ask
 
 Each proposal carries:
 
@@ -89,15 +92,36 @@ Each proposal carries:
 - **the rule**, imperative and narrow enough to be checkable
 - **why**, in the user's own terms, because a rule without its reason gets deleted by the next person
   who finds it inconvenient
+- **scope** — `shared` (this plugin repo) or `local` (a specific project, named)
 - **the exact diff** — the lines to add and the file to add them to
 - **what it would have changed** in the session it came from
 
-Append to `${CLAUDE_PLUGIN_DATA}/learnings/proposals.jsonl` so they outlive the session, present them
-in the conversation, and stop.
+Append every candidate to `${CLAUDE_PLUGIN_DATA}/learnings/proposals.jsonl` first, unconditionally —
+that line is what survives a killed session and stops a candidate from being proposed twice. Then, in
+this conversation, ask about each one individually: apply, skip, or defer. This is the `ask` mode and
+the default (`autoLearn.mode`); set it to `queue` to fall back to the old propose-and-stop behavior,
+which is the right choice for someone who wants more ceremony than the author does.
 
-**Never edit `AGENTS.md`, a SKILL.md, a config file or a memory file from this skill.** Not even one
-the user obviously wants. A system that rewrites its own instructions from inferred corrections is a
-system nobody can audit.
+**On apply**, this skill may write — but only the specific file the confirmed diff named, and only
+after that specific item was confirmed, this run:
+
+- `shared` → the plugin repo, resolved from `${CLAUDE_PLUGIN_ROOT}`'s repo root, never the current
+  project's working tree.
+- `local` → the named project, resolved via `wf_config.py projects --json` when it is not the current
+  repo. Never guess a path.
+
+Commit immediately after applying — one commit per confirmed proposal, in the repo it actually belongs
+to, message naming the rule and citing the session id it came from. **Never `git push` or open a PR**;
+that is the same ask-before boundary every other skill here uses for anything that leaves the local
+repo.
+
+Write the outcome (`applied`, `skipped`, `deferred`) back onto that proposal's line so a re-run does not
+ask about it again. `deferred` may be re-asked next run; `skipped` may not, unless the user asks to
+revisit rejects.
+
+The Stop hook (`autoLearn.hook.enabled`) is unaffected by any of this: it only ever appends to
+`pending.jsonl`, detect-only, per `AGENTS.md` rule #5. Only this skill, run interactively with a human
+turn right there, turns a pending candidate into an applied change.
 
 ## Checking the detector still works
 
@@ -125,8 +149,10 @@ is written down deliberately, so the decision is made on evidence rather than de
 
 ## Hard rules
 
-- Never apply a proposal.
-- Never write outside `${CLAUDE_PLUGIN_DATA}`. The user's repos are read-only here.
+- Never apply a proposal without the user confirming that specific item, in this conversation, this
+  run. A prior "yes" to a different proposal does not carry over.
+- Never write to a file the confirmed diff did not name.
+- Never push or open a PR from this skill, applied proposal or not.
 - Never propose a rule you cannot quote the user saying.
 - Never generalise a one-off preference. "Use `feature/` not `chore/`" is a rule; "the user dislikes the
   word chore" is an overreach.
