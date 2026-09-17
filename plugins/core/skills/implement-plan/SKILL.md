@@ -30,8 +30,16 @@ Before touching anything:
 - **Dirty tree.** Record the dirty paths. If they are disjoint from every task's `files`, proceed and
   exclude them from staging. If any overlap, **stop and ask** — you cannot tell the user's work from
   yours afterwards. Never `git stash`.
-- **Branch.** On a protected branch (`git.protectedBranches`), create `git.branchPrefix` + the plan
-  slug. A `chore/` prefix is forbidden; use `feature/`.
+- **Branch.** On a protected branch (`git.protectedBranches`), **fetch first** and branch from the
+  remote tip, not local state that may be stale:
+
+  ```bash
+  git fetch origin <protected-branch>
+  git checkout -b <git.branchPrefix><plan-slug> origin/<protected-branch>
+  ```
+
+  Skipping the fetch is how a branch starts from a stale `main` and silently misses work merged since
+  the local branch last moved. A `chore/` prefix is forbidden; use `feature/`.
 - **Drift.** A per-task `note` from `resume` means the plan changed after that task was committed.
   Report it. For a done task, do not re-run it; for a pending one, the new definition simply applies.
 - **Orphans.** `orphanTaskIds` means a `Task-Id` on this branch is not in the plan. Report before
