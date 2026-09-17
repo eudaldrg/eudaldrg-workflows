@@ -65,8 +65,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_plan.py" lint <plan.md>
 
 Exit 5 means the plan is not executable. Fix it; do not describe the failure and move on.
 
-Write to `plan.dir` (`.claude/plans/` by default) as `{date}-{slug}.md`. That directory is gitignored —
-if it is not, say so rather than adding entries to `.gitignore` yourself.
+Write to `plan.dir` (`docs/plans/` by default) as `{date}-{slug}.md`. That directory is gitignored —
+if it is not, say so rather than adding entries to `.gitignore` yourself. It lives under `docs/`, not
+`.claude/`, because this repo's plans and run cache must not assume a Claude-Code-specific location —
+`AGENTS.md` best practice #1 is that agent-facing conventions here stay tool-agnostic.
 
 ## Hard rules
 
