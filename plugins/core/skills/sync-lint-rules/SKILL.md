@@ -85,7 +85,8 @@ ls <project>/.git/hooks/pre-commit     # absent means `pre-commit install` was n
 If `.pre-commit-config.yaml` pins a `mirrors-clang-format` revision, compare it against the system
 `clang-format --version`. Two different clang-format versions will disagree silently, and the
 generated file may use keys the older one does not recognise — `cpp.minClangFormatVersion` records
-the floor.
+the floor. Likewise `cpp.minClangTidyVersion` records the floor for `.clang-tidy` scalars —
+`ExcludeHeaderFilterRegex` needs clang-tidy 19+; an older `clang-tidy --dump-config` will reject it.
 
 ## Hard rules
 

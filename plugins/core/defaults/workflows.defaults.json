@@ -74,6 +74,7 @@
     "enabled": false,
     "generatedFiles": [".clang-format", ".clang-tidy"],
     "minClangFormatVersion": "18",
+    "minClangTidyVersion": "19",
     "driftCheck": "warn",
     "clangFormat": { "overrides": {}, "unset": [] },
     "clangTidy": { "checksAdd": [], "checksRemove": [], "options": {}, "scalars": {} }
