@@ -22,8 +22,8 @@
 
   "plan": {
     "format": "markdown",
-    "dir": "docs/plans",
-    "runDir": "docs/runs",
+    "dir": "plans",
+    "runDir": "runs",
     "filenamePattern": "{date}-{slug}.md",
     "sections": ["context", "decisions", "tasks", "risks", "verification"]
   },

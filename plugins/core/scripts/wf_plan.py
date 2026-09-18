@@ -321,9 +321,8 @@ def ledger(root: Path, plan_id: str, base: str) -> dict[str, list[dict]]:
 
 
 def run_cache_path(root: Path, plan_id: str) -> Path:
-    merged, _, _ = wf_config.load_all(str(root))
-    run_dir, found = wf_config.lookup(merged, "plan.runDir")
-    return root / (str(run_dir) if found else "docs/runs") / f"{plan_id}.json"
+    run_dir = wf_config.state_path(str(root), "plan.runDir", "runs")
+    return run_dir / f"{plan_id}.json"
 
 
 def read_cache(path: Path) -> dict:

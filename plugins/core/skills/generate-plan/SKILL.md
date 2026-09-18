@@ -65,10 +65,21 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_plan.py" lint <plan.md>
 
 Exit 5 means the plan is not executable. Fix it; do not describe the failure and move on.
 
-Write to `plan.dir` (`docs/plans/` by default) as `{date}-{slug}.md`. That directory is gitignored —
-if it is not, say so rather than adding entries to `.gitignore` yourself. It lives under `docs/`, not
-`.claude/`, because this repo's plans and run cache must not assume a Claude-Code-specific location —
-`AGENTS.md` best practice #1 is that agent-facing conventions here stay tool-agnostic.
+Resolve the plan directory — never hardcode a path:
+
+```bash
+plan_dir="$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_config.py" state-dir plan.dir --default plans)"
+```
+
+`state-dir` resolves and creates a directory *outside* this repo, under `${XDG_STATE_HOME:-~/.local/state}/wf/`,
+keyed off `git rev-parse --git-common-dir` — the directory every linked worktree of this repo shares,
+not the one each worktree's own path would give you. That means plans survive `git worktree remove`,
+three parallel agents in three worktrees all see the same plan directory, and nothing here is ever
+gitignored, committed or pushed because it was never inside the repo to begin with. This is still
+tool-agnostic — plain git plus the XDG state dir, not a Claude-Code-specific location — which is
+`AGENTS.md` best practice #1.
+
+Write `{date}-{slug}.md` into `$plan_dir`.
 
 ## Hard rules
 

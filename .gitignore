@@ -1,6 +1,4 @@
 .claude/scheduled_tasks.lock
 .claude/backup/
-docs/plans/
-docs/runs/
 __pycache__/
 *.pyc

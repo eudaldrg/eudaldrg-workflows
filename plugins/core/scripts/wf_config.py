@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import shutil
@@ -83,6 +84,94 @@ def layer_paths(explicit_project: str | None = None) -> dict[str, Path]:
         "home": home_config_path(),
         "project": project_root(explicit_project) / ".claude" / "workflows.json",
     }
+
+
+# --------------------------------------------------------------------------- state (worktree-shared)
+
+# Anything generated per-project that must not be pushed and must survive `git worktree`
+# (plans, run caches, ...) lives outside the repo entirely, keyed by the repo's shared git
+# directory rather than by any one worktree's path. `--git-common-dir` resolves to the same
+# place from every linked worktree; `--show-toplevel` would not.
+
+
+def state_home() -> Path:
+    override = os.environ.get("WF_STATE_HOME")
+    if override:
+        return Path(override)
+    base = os.environ.get("XDG_STATE_HOME")
+    root = Path(base) if base else Path.home() / ".local" / "state"
+    return root / "wf"
+
+
+def git_common_dir(start: Path) -> Path | None:
+    """The repo's shared .git dir, absolute, or None outside a git repo.
+
+    `--path-format=absolute` needs git >= 2.31; older git returns a path that may be
+    relative to `start`, so that case is resolved by hand.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(start), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode == 0 and out.stdout.strip():
+        return Path(out.stdout.strip()).resolve()
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(start), "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0 or not out.stdout.strip():
+        return None
+    common = Path(out.stdout.strip())
+    return (common if common.is_absolute() else start / common).resolve()
+
+
+def state_anchor(explicit_project: str | None = None) -> tuple[Path, Path]:
+    """(anchor, root): anchor is what state is keyed on (one per repo, shared across all its
+    worktrees); root is this call's own project root (one per worktree)."""
+    root = project_root(explicit_project)
+    common = git_common_dir(root)
+    return (common if common is not None else root), root
+
+
+def state_root(explicit_project: str | None = None) -> Path:
+    """The external, worktree-shared directory for this repo. Created on demand."""
+    anchor, root = state_anchor(explicit_project)
+    digest = hashlib.sha256(str(anchor).encode("utf-8")).hexdigest()[:16]
+    base = state_home() / digest
+    base.mkdir(parents=True, exist_ok=True)
+
+    meta_path = base / "meta.json"
+    meta = read_layer(meta_path)
+    roots = set(meta.get("roots") or [])
+    changed = meta.get("anchor") != str(anchor) or str(root) not in roots
+    if changed:
+        roots.add(str(root))
+        meta_path.write_text(
+            json.dumps({"anchor": str(anchor), "roots": sorted(roots)}, indent=2, ensure_ascii=False)
+            + "\n",
+            encoding="utf-8",
+        )
+    return base
+
+
+def state_path(explicit_project: str | None, dotted: str, default: str) -> Path:
+    """Resolve a dotted config key (e.g. `plan.dir`) as a subdir of `state_root`, creating it."""
+    merged, _, _ = load_all(explicit_project)
+    value, found = lookup(merged, dotted)
+    sub = str(value) if found and value else default
+    target = state_root(explicit_project) / sub
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 # --------------------------------------------------------------------------- loading
@@ -526,6 +615,41 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     return doctor()
 
 
+def cmd_state_dir(args: argparse.Namespace) -> int:
+    if not args.key:
+        print(state_root(args.project))
+        return OK
+    print(state_path(args.project, args.key, args.default))
+    return OK
+
+
+def cmd_state_gc(args: argparse.Namespace) -> int:
+    base = state_home()
+    if not base.is_dir():
+        print("no state root yet")
+        return OK
+    stale = []
+    for entry in sorted(base.iterdir()):
+        if not entry.is_dir():
+            continue
+        meta = read_layer(entry / "meta.json")
+        anchor = meta.get("anchor")
+        if not anchor or not Path(str(anchor)).exists():
+            stale.append(entry)
+    if not stale:
+        print("nothing stale")
+        return OK
+    for entry in stale:
+        if args.apply:
+            shutil.rmtree(entry)
+            print(f"removed  {entry.name}\t{entry}")
+        else:
+            print(f"stale    {entry.name}\t{entry}")
+    if stale and not args.apply:
+        print("\nre-run with --apply to delete", file=sys.stderr)
+    return OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="wf_config.py", description=__doc__)
     parser.add_argument("--project", help="treat this directory as the project root")
@@ -566,6 +690,23 @@ def build_parser() -> argparse.ArgumentParser:
     projects.set_defaults(func=cmd_projects)
 
     sub.add_parser("doctor", help="report missing prerequisites").set_defaults(func=cmd_doctor)
+
+    state = sub.add_parser(
+        "state-dir",
+        help="resolve (and create) a path under this repo's external, worktree-shared state root",
+    )
+    state.add_argument(
+        "key", nargs="?", help="dotted config key naming the subdir, e.g. plan.dir; omit for the bare root"
+    )
+    state.add_argument("--default", default="", help="subdir name to use if the key is unset")
+    state.set_defaults(func=cmd_state_dir)
+
+    gc = sub.add_parser(
+        "state-gc", help="list (or, with --apply, delete) state dirs whose repo no longer exists"
+    )
+    gc.add_argument("--apply", action="store_true")
+    gc.set_defaults(func=cmd_state_gc)
+
     return parser
 
 

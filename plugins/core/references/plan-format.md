@@ -90,7 +90,9 @@ Task-Id: T1
 ```
 
 `wf_plan.py resume` reconstructs the ledger from those trailers alone. A cache under `plan.runDir`
-(gitignored) holds attempt counts and failure detail, but **git wins on conflict**. So a dead session
+holds attempt counts and failure detail, but **git wins on conflict**. That cache lives outside the
+repo (`wf_config.py state-dir`, keyed off `git rev-parse --git-common-dir`, shared by every worktree of
+this repo) — not gitignored, because it was never inside the repo to begin with. So a dead session
 loses nothing, deleting the cache loses nothing, and resuming after a fresh clone works.
 
 This is also why `implement-plan` never uses `git commit --amend`: amending rewrites the commit that
