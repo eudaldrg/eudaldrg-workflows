@@ -86,42 +86,18 @@ Record the rejects too, with which class they fell into, so the next run does no
 
 ## Propose, then ask
 
-Each proposal carries:
+Read `${CLAUDE_PLUGIN_ROOT}/references/propose-then-ask.md` for the full mechanics — scope tagging,
+the ask/apply/commit flow, `autoLearn.mode`, and why this is safe for a skill (never a hook) to do.
+This section only adds what is specific to a correction turning into a rule:
 
-- **the evidence** — session id, timestamp, and what the user actually wrote
-- **the rule**, imperative and narrow enough to be checkable
-- **why**, in the user's own terms, because a rule without its reason gets deleted by the next person
+- **the evidence** is a session id, timestamp, and what the user actually wrote
+- **the rule** is imperative and narrow enough to be checkable
+- **why** is in the user's own terms, because a rule without its reason gets deleted by the next person
   who finds it inconvenient
-- **scope** — `shared` (this plugin repo) or `local` (a specific project, named)
-- **the exact diff** — the lines to add and the file to add them to
-- **what it would have changed** in the session it came from
 
-Append every candidate to `${CLAUDE_PLUGIN_DATA}/learnings/proposals.jsonl` first, unconditionally —
-that line is what survives a killed session and stops a candidate from being proposed twice. Then, in
-this conversation, ask about each one individually: apply, skip, or defer. This is the `ask` mode and
-the default (`autoLearn.mode`); set it to `queue` to fall back to the old propose-and-stop behavior,
-which is the right choice for someone who wants more ceremony than the author does.
-
-**On apply**, this skill may write — but only the specific file the confirmed diff named, and only
-after that specific item was confirmed, this run:
-
-- `shared` → the plugin repo, resolved from `${CLAUDE_PLUGIN_ROOT}`'s repo root, never the current
-  project's working tree.
-- `local` → the named project, resolved via `wf_config.py projects --json` when it is not the current
-  repo. Never guess a path.
-
-Commit immediately after applying — one commit per confirmed proposal, in the repo it actually belongs
-to, message naming the rule and citing the session id it came from. **Never `git push` or open a PR**;
-that is the same ask-before boundary every other skill here uses for anything that leaves the local
-repo.
-
-Write the outcome (`applied`, `skipped`, `deferred`) back onto that proposal's line so a re-run does not
-ask about it again. `deferred` may be re-asked next run; `skipped` may not, unless the user asks to
-revisit rejects.
-
-The Stop hook (`autoLearn.hook.enabled`) is unaffected by any of this: it only ever appends to
-`pending.jsonl`, detect-only, per `AGENTS.md` rule #5. Only this skill, run interactively with a human
-turn right there, turns a pending candidate into an applied change.
+The Stop hook (`autoLearn.hook.enabled`) only ever appends to `pending.jsonl`, detect-only, per
+`AGENTS.md` rule #5. Only this skill, run interactively, turns a pending candidate into a proposal and,
+on a yes, an applied change.
 
 ## Checking the detector still works
 
@@ -149,11 +125,9 @@ is written down deliberately, so the decision is made on evidence rather than de
 
 ## Hard rules
 
-- Never apply a proposal without the user confirming that specific item, in this conversation, this
-  run. A prior "yes" to a different proposal does not carry over.
-- Never write to a file the confirmed diff did not name.
-- Never push or open a PR from this skill, applied proposal or not.
+See `references/propose-then-ask.md` for the apply/commit/scope rules shared with `session-wrap`. Specific
+to this skill:
+
 - Never propose a rule you cannot quote the user saying.
 - Never generalise a one-off preference. "Use `feature/` not `chore/`" is a rule; "the user dislikes the
   word chore" is an overreach.
-- Never propose something the target file already says.
