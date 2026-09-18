@@ -280,8 +280,8 @@ def evaluate_when(predicate: object, root: Path) -> bool:
 # --------------------------------------------------------------------------- validation
 
 KNOWN_TOP_LEVEL = {
-    "version", "init", "knowledge", "plan", "implement", "sessions", "briefing", "autoLearn", "cpp", "git",
-    "statusLine", "projects",
+    "version", "init", "knowledge", "plan", "implement", "sessions", "briefing", "autoLearn", "sessionWrap",
+    "cpp", "git", "statusLine", "projects",
 }
 
 ENUMS = {
@@ -292,6 +292,7 @@ ENUMS = {
     "cpp.driftCheck": {"off", "warn", "block"},
     "git.commitStyle": {"conventional", "free"},
     "autoLearn.mode": {"ask", "queue"},
+    "sessionWrap.mode": {"ask", "queue"},
 }
 
 TYPES = {

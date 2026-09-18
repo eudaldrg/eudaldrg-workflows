@@ -70,6 +70,10 @@
     "mode": "ask"
   },
 
+  "sessionWrap": {
+    "mode": "ask"
+  },
+
   "cpp": {
     "enabled": false,
     "generatedFiles": [".clang-format", ".clang-tidy"],
