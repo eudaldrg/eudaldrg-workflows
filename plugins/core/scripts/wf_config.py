@@ -370,7 +370,7 @@ def evaluate_when(predicate: object, root: Path) -> bool:
 
 KNOWN_TOP_LEVEL = {
     "version", "init", "knowledge", "plan", "implement", "sessions", "briefing", "autoLearn", "sessionWrap",
-    "cpp", "git", "statusLine", "projects",
+    "cpp", "git", "gitDiff", "statusLine", "projects",
 }
 
 ENUMS = {
@@ -401,6 +401,9 @@ TYPES = {
     "briefing.openBrowser": bool,
     "autoLearn.hook.enabled": bool,
     "autoLearn.minScore": int,
+    "gitDiff.enabled": bool,
+    "gitDiff.difftastic.enabled": bool,
+    "gitDiff.delta.enabled": bool,
     "statusLine.showGitBranch": bool,
     "statusLine.showBurnRate": bool,
     "statusLine.contextWarnPercent": int,
@@ -483,6 +486,8 @@ TOOLS = [
     ("clang-format", ["--version"], False, "sudo apt install clang-format"),
     ("clang-tidy", ["--version"], False, "sudo apt install clang-tidy"),
     ("pre-commit", ["--version"], False, "pipx install pre-commit"),
+    ("difft", ["--version"], False, "/core:setup-git-diff (downloads the release binary)"),
+    ("delta", ["--version"], False, "sudo apt install git-delta"),
 ]
 
 

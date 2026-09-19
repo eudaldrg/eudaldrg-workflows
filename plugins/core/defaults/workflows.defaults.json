@@ -94,6 +94,12 @@
     "costRateCritUsdPerHr": 20
   },
 
+  "gitDiff": {
+    "enabled": false,
+    "difftastic": { "enabled": true, "version": "latest", "installDir": "~/.local/bin" },
+    "delta": { "enabled": true }
+  },
+
   "git": {
     "commitStyle": "conventional",
     "branchPrefix": "feature/",
