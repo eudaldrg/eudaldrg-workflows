@@ -20,6 +20,10 @@ top-level `statusLine` key and leaves the rest of the file alone.
 <host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) $<cost> ($<rate>/hr)
 ```
 
+On a narrow terminal (e.g. a phone) the segments wrap onto extra rows instead of being
+cut off. The width is read from the tmux pane, then `$COLUMNS`, then `statusLine.maxWidth` in the
+layered config (default `0` = never wrap, one row).
+
 Every segment after `<host>:<wd>` drops out independently when its data isn't available (no git
 repo, model without an effort parameter, session too short for a burn rate). Thresholds for the
 color-coded context percentage and cost live in the layered config under `statusLine.*` — see

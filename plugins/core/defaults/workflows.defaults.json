@@ -87,6 +87,7 @@
   "statusLine": {
     "showGitBranch": true,
     "showBurnRate": true,
+    "maxWidth": 0,
     "contextWarnPercent": 60,
     "contextCritPercent": 85,
     "costRateWarnUsdPerHr": 6,
