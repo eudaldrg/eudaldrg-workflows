@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render the shared status line from the JSON Claude Code pipes to stdin.
 
-    <host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) $<cost> ($<rate>/hr)
+    <host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <left>/<ttl> $<cost> ($<rate>/hr)
 
 When the terminal is too narrow for that on one row (a phone), the segments wrap onto several
 rows — Claude Code renders every printed line as its own status row. Width comes from the tmux
@@ -20,6 +20,7 @@ import re
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -61,6 +62,32 @@ def color_for(value: float, warn: float, crit: float) -> str:
 
 def wrap(text: str, color: str) -> str:
     return f"{color}{text}{RESET}" if color else text
+
+
+def format_remaining(seconds: int) -> str:
+    if seconds >= 3600:
+        return f"{seconds // 3600}h{seconds % 3600 // 60:02d}m"
+    if seconds >= 60:
+        return f"{seconds // 60}m"
+    return f"{seconds}s"
+
+
+def cache_segment(cache: dict, warn_seconds: int, now: float) -> str | None:
+    """Time left on the prompt cache, or "cache cold" once it has expired.
+
+    Claude Code reports an absolute `expires_at` that moves forward on every request, so this
+    only stays accurate if the status line is re-run periodically (see `refreshInterval`).
+    """
+    if not cache.get("caching_observed"):
+        return None
+    expires_at = cache.get("expires_at")
+    remaining = int(expires_at - now) if isinstance(expires_at, (int, float)) else 0
+    if not cache.get("warm") or remaining <= 0:
+        return wrap("cache cold", RED)
+    text = f"cache {format_remaining(remaining)}"
+    if cache.get("ttl"):
+        text += f"/{cache['ttl']}"
+    return wrap(text, YELLOW if remaining < warn_seconds else "")
 
 
 def collapse_home(path: str) -> str:
@@ -175,6 +202,13 @@ def build_line(payload: dict, merged: dict) -> str:
                 crit = cfg(merged, "statusLine.contextCritPercent", 85)
                 token_text += " " + wrap(f"({pct:.0f}%)", color_for(pct, warn, crit))
             segments.append(token_text)
+
+    cache = payload.get("prompt_cache")
+    if cache and cfg(merged, "statusLine.showCache", True):
+        warn_seconds = cfg(merged, "statusLine.cacheWarnSeconds", 300)
+        cache_text = cache_segment(cache, warn_seconds, time.time())
+        if cache_text:
+            segments.append(cache_text)
 
     cost = payload.get("cost", {})
     total_cost = cost.get("total_cost_usd")

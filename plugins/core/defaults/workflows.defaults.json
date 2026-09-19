@@ -87,6 +87,8 @@
   "statusLine": {
     "showGitBranch": true,
     "showBurnRate": true,
+  "showCache": true,
+  "cacheWarnSeconds": 300,
     "maxWidth": 0,
     "contextWarnPercent": 60,
     "contextCritPercent": 85,
