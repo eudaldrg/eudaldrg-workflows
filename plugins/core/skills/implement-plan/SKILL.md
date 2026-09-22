@@ -27,6 +27,14 @@ git status --porcelain
 that died mid-session resumes correctly and a deleted run cache costs nothing. Never assume a task is
 pending because the cache says so.
 
+If the previous session for this plan did not end cleanly — it crashed, was killed, or the terminal is
+just gone with no sign of why — run `/core:session-wrap --session <that session's id>` on it before
+resuming. That is a cheap, read-only scan of the already-saved transcript (`wf_sessions.py show`), not
+a reload of that session's live context, so it costs nothing like resuming its context on a cold cache
+would. The crash itself is exactly the kind of thing session-wrap exists to catch (a resource limit the
+run hit, a step that needs a guard added), and it is easy to lose once the plan moves on and the
+failure stops being reproducible.
+
 Before touching anything:
 
 - **Dirty tree.** Record the dirty paths. If they are disjoint from every task's `files`, proceed and
