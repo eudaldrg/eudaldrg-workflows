@@ -47,7 +47,7 @@ Add frontmatter when it earns its place:
 ---
 aliases: [feed, ingest]
 sources: [src/feed_handler/**]
-decisions: [decisions/0001-feed-source-selection.md]
+decisions: [decisions/0001-webhook-source-selection.md]
 ---
 ```
 
