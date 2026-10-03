@@ -21,6 +21,10 @@ ERR_BAD_JSON = 2
 
 MARKER = "wf_statusline.py"
 
+# The status line is otherwise event-driven (assistant turns, mode changes), so an idle session
+# or a pane resized by a phone attaching keeps a stale row layout until something happens.
+REFRESH_INTERVAL_SECONDS = 5
+
 
 def settings_path(override: str | None) -> Path:
     if override:
@@ -34,6 +38,7 @@ def desired_block() -> dict:
         "type": "command",
         "command": f"python3 {script}",
         "padding": 1,
+        "refreshInterval": REFRESH_INTERVAL_SECONDS,
     }
 
 

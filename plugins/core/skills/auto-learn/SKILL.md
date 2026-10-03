@@ -36,8 +36,11 @@ A rule that belongs everywhere goes to one of:
 | How a workflow skill should behave | the relevant `skills/<name>/SKILL.md` |
 | A convention for one other repo | that repo's `AGENTS.md` |
 
-**Check the target first.** `git.forbiddenBranchPrefixes` already encodes the `chore/` rule; proposing
-it again would be a duplicate that drifts. A promotion that is already done is the expected result, and
+The first two are `shared` scope (this plugin repo); the third is `local` scope, resolved to that
+specific repo. See "Propose, then ask" below for what each scope means for applying.
+
+**Check the target first.** `git.forbiddenBranchPrefixes` and the plan commit types already encode the
+no-`chore` rule; proposing it again would be a duplicate that drifts. A promotion that is already done is the expected result, and
 saying so is a real answer.
 
 Also report `orphaned` slugs. Those hold rules for a project that no longer resolves — usually a
@@ -81,23 +84,20 @@ Then classify:
 
 Record the rejects too, with which class they fell into, so the next run does not re-litigate them.
 
-## Propose, never apply
+## Propose, then ask
 
-Each proposal carries:
+Read `${CLAUDE_PLUGIN_ROOT}/references/propose-then-ask.md` for the full mechanics — scope tagging,
+the ask/apply/commit flow, `autoLearn.mode`, and why this is safe for a skill (never a hook) to do.
+This section only adds what is specific to a correction turning into a rule:
 
-- **the evidence** — session id, timestamp, and what the user actually wrote
-- **the rule**, imperative and narrow enough to be checkable
-- **why**, in the user's own terms, because a rule without its reason gets deleted by the next person
+- **the evidence** is a session id, timestamp, and what the user actually wrote
+- **the rule** is imperative and narrow enough to be checkable
+- **why** is in the user's own terms, because a rule without its reason gets deleted by the next person
   who finds it inconvenient
-- **the exact diff** — the lines to add and the file to add them to
-- **what it would have changed** in the session it came from
 
-Append to `${CLAUDE_PLUGIN_DATA}/learnings/proposals.jsonl` so they outlive the session, present them
-in the conversation, and stop.
-
-**Never edit `AGENTS.md`, a SKILL.md, a config file or a memory file from this skill.** Not even one
-the user obviously wants. A system that rewrites its own instructions from inferred corrections is a
-system nobody can audit.
+The Stop hook (`autoLearn.hook.enabled`) only ever appends to `pending.jsonl`, detect-only, per
+`AGENTS.md` rule #5. Only this skill, run interactively, turns a pending candidate into a proposal and,
+on a yes, an applied change.
 
 ## Checking the detector still works
 
@@ -125,9 +125,9 @@ is written down deliberately, so the decision is made on evidence rather than de
 
 ## Hard rules
 
-- Never apply a proposal.
-- Never write outside `${CLAUDE_PLUGIN_DATA}`. The user's repos are read-only here.
+See `references/propose-then-ask.md` for the apply/commit/scope rules shared with `session-wrap`. Specific
+to this skill:
+
 - Never propose a rule you cannot quote the user saying.
-- Never generalise a one-off preference. "Use `feature/` not `chore/`" is a rule; "the user dislikes the
-  word chore" is an overreach.
-- Never propose something the target file already says.
+- Never generalise a one-off preference. "Ask before opening a PR" is a rule; "the user dislikes PRs"
+  is an overreach.

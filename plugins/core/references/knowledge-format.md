@@ -12,7 +12,7 @@ Knowledge is organised on two **orthogonal** axes, stored as two independent set
       testing.md        how you do this thing in this repo
       replay.md
       profiling.md
-  decisions/            ADRs — a third category, left alone
+  decisions/            ADRs — a third category, owned by the design skill (references/adr-format.md)
 ```
 
 A question names a point on each axis — "I'm debugging the feed handler" — and the answer is the

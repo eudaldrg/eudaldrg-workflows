@@ -17,8 +17,20 @@ top-level `statusLine` key and leaves the rest of the file alone.
 `${CLAUDE_PLUGIN_ROOT}/scripts/wf_statusline.py` renders:
 
 ```
-<host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) $<cost> ($<rate>/hr)
+<host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <state> [($<next>r|w)] $<cost> ($<rate>/hr)
 ```
+
+On a narrow terminal (e.g. a phone) the segments wrap onto extra rows instead of being
+cut off. The width is read from the tmux pane, then `$COLUMNS`, then `statusLine.maxWidth` in the
+layered config (default `0` = never wrap, one row).
+
+The block sets `refreshInterval` (5s) because Claude Code otherwise re-runs the command only on
+events such as assistant turns: without it, an idle session — or one whose pane was just resized
+by a phone attaching — keeps the row layout it last rendered until something happens.
+
+`cache <left>/<ttl>` counts down the prompt cache's remaining lifetime, turns yellow under
+`statusLine.cacheWarnSeconds` (default 300) and shows red `cache cold` once it has expired and red `cache none` when no caching has been observed. It is always shown, followed by what the next request costs for the existing context: `$…r` (cache read, warm) or `$…w` (cache write, cold/none; 1h TTL assumed when unknown). The amount is omitted for a model with no known price; hide it
+with `statusLine.showCache: false`. That is why the `refreshInterval` above matters.
 
 Every segment after `<host>:<wd>` drops out independently when its data isn't available (no git
 repo, model without an effort parameter, session too short for a burn rate). Thresholds for the

@@ -22,8 +22,8 @@
 
   "plan": {
     "format": "markdown",
-    "dir": ".claude/plans",
-    "runDir": ".claude/runs",
+    "dir": "plans",
+    "runDir": "runs",
     "filenamePattern": "{date}-{slug}.md",
     "sections": ["context", "decisions", "tasks", "risks", "verification"]
   },
@@ -66,13 +66,19 @@
     "hook": { "enabled": false },
     "minScore": 2,
     "pendingFile": "learnings/pending.jsonl",
-    "maxCandidatesPerRun": 25
+    "maxCandidatesPerRun": 25,
+    "mode": "ask"
+  },
+
+  "sessionWrap": {
+    "mode": "ask"
   },
 
   "cpp": {
     "enabled": false,
     "generatedFiles": [".clang-format", ".clang-tidy"],
     "minClangFormatVersion": "18",
+    "minClangTidyVersion": "19",
     "driftCheck": "warn",
     "clangFormat": { "overrides": {}, "unset": [] },
     "clangTidy": { "checksAdd": [], "checksRemove": [], "options": {}, "scalars": {} }
@@ -81,10 +87,19 @@
   "statusLine": {
     "showGitBranch": true,
     "showBurnRate": true,
+    "showCache": true,
+    "cacheWarnSeconds": 300,
+    "maxWidth": 0,
     "contextWarnPercent": 60,
     "contextCritPercent": 85,
-    "costWarnUsd": 3,
-    "costCritUsd": 10
+    "costRateWarnUsdPerHr": 6,
+    "costRateCritUsdPerHr": 20
+  },
+
+  "gitDiff": {
+    "enabled": false,
+    "difftastic": { "enabled": true, "version": "latest", "installDir": "~/.local/bin" },
+    "delta": { "enabled": true }
   },
 
   "git": {

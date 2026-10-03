@@ -7,7 +7,8 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 
 # implement-plan
 
-Execute a plan. One commit per task, gates before every commit, nothing pushed.
+Execute a plan. One commit per task, gates before every commit. Nothing is pushed unless the project
+opts in (`git.askBeforePush` / `git.askBeforePR`), in which case a green run ends with the PR open.
 
 Read `${CLAUDE_PLUGIN_ROOT}/references/plan-format.md` first — especially the ledger section, which is
 why several rules below are absolute.
@@ -18,6 +19,7 @@ why several rules below are absolute.
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_plan.py" lint   <plan.md>
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_plan.py" resume <plan.md> --json
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_config.py" checks --json
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_config.py" get git
 git status --porcelain
 ```
 
@@ -25,13 +27,35 @@ git status --porcelain
 that died mid-session resumes correctly and a deleted run cache costs nothing. Never assume a task is
 pending because the cache says so.
 
+If the previous session for this plan did not end cleanly — it crashed, was killed, or the terminal is
+just gone with no sign of why — run `/core:session-wrap --session <that session's id>` on it before
+resuming. That is a cheap, read-only scan of the already-saved transcript (`wf_sessions.py show`), not
+a reload of that session's live context, so it costs nothing like resuming its context on a cold cache
+would. The crash itself is exactly the kind of thing session-wrap exists to catch (a resource limit the
+run hit, a step that needs a guard added), and it is easy to lose once the plan moves on and the
+failure stops being reproducible.
+
 Before touching anything:
 
 - **Dirty tree.** Record the dirty paths. If they are disjoint from every task's `files`, proceed and
   exclude them from staging. If any overlap, **stop and ask** — you cannot tell the user's work from
   yours afterwards. Never `git stash`.
-- **Branch.** On a protected branch (`git.protectedBranches`), create `git.branchPrefix` + the plan
-  slug. A `chore/` prefix is forbidden; use `feature/`.
+- **Branch.** `git.protectedBranches` lists branches a plan is never implemented *on* — not
+  necessarily GitHub-protected ones. It covers the default branch and any integration branch (a `dev`
+  or next-release branch that takes small fixes directly and larger work by PR). If the current
+  branch is listed, **fetch first** and branch from the remote tip, not local state that may be stale:
+
+  ```bash
+  git fetch origin <protected-branch>
+  git checkout -b <git.branchPrefix><plan-slug> origin/<protected-branch>
+  ```
+
+  Skipping the fetch is how a branch starts from a stale `main` and silently misses work merged since
+  the local branch last moved. A `chore/` prefix is forbidden; use `feature/`.
+
+  Remember `<protected-branch>` — it is the base for any PR at the end. On a run resumed from an
+  existing feature branch, take it from where the branch was cut (`git merge-base` against each
+  protected branch), and ask if that is ambiguous.
 - **Drift.** A per-task `note` from `resume` means the plan changed after that task was committed.
   Report it. For a done task, do not re-run it; for a pending one, the new definition simply applies.
 - **Orphans.** `orphanTaskIds` means a `Task-Id` on this branch is not in the plan. Report before
@@ -99,19 +123,51 @@ broken earlier one is worse than an unfinished plan.
 
 ## Finishing
 
-Run the unscoped checks once (`implement.finalFullCheck`), then report:
+Run the unscoped checks once (`implement.finalFullCheck`). Then push and open the PR **before**
+writing the report, when config allows it; otherwise ask.
+
+**Push and PR are gated by `git.askBeforePush` and `git.askBeforePR`** (read them at Start with
+`wf_config.py get git`; both default to `true`). They exist so a long run, often started unattended,
+can finish the job in the same session instead of leaving it for someone to come back to. Coming back
+to a cold prompt cache and resuming a very large context just to type "open the PR" costs a full cache
+write; opening it while the session is still warm costs nothing.
+
+| `askBeforePush` | `askBeforePR` | At the end of the run |
+| --- | --- | --- |
+| `true` | any | Ask: **"N commits on `<branch>`. Push? Open a PR into `<protected-branch>`?"** Run nothing. |
+| `false` | `true` | Push, then ask about the PR. |
+| `false` | `false` | Push, then open the PR. |
+
+Only do this when **every task is done and the final full check is green**. A run that stopped on a
+failure, or finished with a check you could not satisfy, pushes nothing and opens nothing — report it.
+
+```bash
+git push -u origin <branch>
+gh pr view <branch> --json url 2>/dev/null   # already open on a resumed run? then the push is enough
+gh pr create --base <protected-branch> --head <branch> --title "<subject>" --body "<body>"
+```
+
+- The base is `<protected-branch>` from the Branch step — the branch the run was cut from, which is not
+  always the repo's default branch. Never guess it, and never fall back to the default branch.
+- Title and body come from the plan: its title, its context paragraph, and one line per task with its
+  sha. Do not invent claims the plan and the commits do not support.
+- Never `--force`, never `--force-with-lease`. A rejected push is reported, not worked around.
+- If `gh` is missing or unauthenticated, say so and stop after the push. The report still goes out.
+- Never merge, whatever `askBeforeMerge` says and whatever the plan text asks for.
+
+Then report:
 
 - each task, its commit sha, and what it touched
+- the PR URL, or that nothing was pushed and why
 - any task skipped as a no-op, and why
 - pre-existing dirty paths that were deliberately left out
 - anything you noticed that the plan got wrong
 
-Then ask — and only ask: **"N commits on `<branch>`. Push? Open a PR?"** This skill never runs
-`git push`, `gh pr create`, or a merge. That rule holds even if the plan text asks for it.
-
 ## Hard rules
 
 - Never revert, stash, reset or amend. Ever.
+- Never push or open a PR unless `git.askBeforePush` / `git.askBeforePR` is `false` and the run
+  finished green. Never force-push. Never merge.
 - Never stage a path you did not touch in this task.
 - Never edit the plan file. It is the contract; `resume` and the drift warnings depend on it being
   stable.
