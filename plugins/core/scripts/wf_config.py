@@ -18,6 +18,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -135,6 +136,31 @@ def git_common_dir(start: Path) -> Path | None:
     return (common if common.is_absolute() else start / common).resolve()
 
 
+STATE_ID_FILE = "wf-state-id"
+
+
+def state_digest(anchor: Path, in_git: bool) -> str:
+    """The state directory name for a repo. Inside git it is stored in the shared git dir on first
+    use, so it travels with the repo when it is moved or renamed. It starts as the hash of the
+    current path, which is what every state directory was named before the id file existed, so
+    existing state keeps its name. (A `cp -r` of a repo copies the id too and shares its plans.)"""
+    digest = hashlib.sha256(str(anchor).encode("utf-8")).hexdigest()[:16]
+    if not in_git:
+        return digest
+    id_file = anchor / STATE_ID_FILE
+    try:
+        stored = id_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        stored = ""
+    if re.fullmatch(r"[0-9a-f]{16}", stored):
+        return stored
+    try:
+        id_file.write_text(digest + "\n", encoding="utf-8")
+    except OSError:
+        pass  # read-only git dir: fall back to the path hash, as before
+    return digest
+
+
 def state_anchor(explicit_project: str | None = None) -> tuple[Path, Path]:
     """(anchor, root): anchor is what state is keyed on (one per repo, shared across all its
     worktrees); root is this call's own project root (one per worktree)."""
@@ -146,8 +172,8 @@ def state_anchor(explicit_project: str | None = None) -> tuple[Path, Path]:
 def state_root(explicit_project: str | None = None) -> Path:
     """The external, worktree-shared directory for this repo. Created on demand."""
     anchor, root = state_anchor(explicit_project)
-    digest = hashlib.sha256(str(anchor).encode("utf-8")).hexdigest()[:16]
-    base = state_home() / digest
+    # The anchor is the git common dir inside a repo, and the project root itself outside one.
+    base = state_home() / state_digest(anchor, in_git=anchor != root)
     base.mkdir(parents=True, exist_ok=True)
 
     meta_path = base / "meta.json"
@@ -644,6 +670,11 @@ def cmd_state_gc(args: argparse.Namespace) -> int:
     if not stale:
         print("nothing stale")
         return OK
+    print(
+        "stale = the repo is no longer at its recorded path: deleted, or moved and not used since.\n"
+        "A moved repo re-links its state the next time a plan command runs inside it; do that\n"
+        "before --apply to keep its plans.\n"
+    )
     for entry in stale:
         if args.apply:
             shutil.rmtree(entry)
