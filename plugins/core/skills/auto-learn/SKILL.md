@@ -39,8 +39,8 @@ A rule that belongs everywhere goes to one of:
 The first two are `shared` scope (this plugin repo); the third is `local` scope, resolved to that
 specific repo. See "Propose, then ask" below for what each scope means for applying.
 
-**Check the target first.** `git.forbiddenBranchPrefixes` already encodes the `chore/` rule; proposing
-it again would be a duplicate that drifts. A promotion that is already done is the expected result, and
+**Check the target first.** `git.forbiddenBranchPrefixes` and the plan commit types already encode the
+no-`chore` rule; proposing it again would be a duplicate that drifts. A promotion that is already done is the expected result, and
 saying so is a real answer.
 
 Also report `orphaned` slugs. Those hold rules for a project that no longer resolves — usually a
@@ -129,5 +129,5 @@ See `references/propose-then-ask.md` for the apply/commit/scope rules shared wit
 to this skill:
 
 - Never propose a rule you cannot quote the user saying.
-- Never generalise a one-off preference. "Use `feature/` not `chore/`" is a rule; "the user dislikes the
-  word chore" is an overreach.
+- Never generalise a one-off preference. "Ask before opening a PR" is a rule; "the user dislikes PRs"
+  is an overreach.

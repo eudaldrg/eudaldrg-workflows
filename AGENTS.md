@@ -75,6 +75,10 @@ picked up live. Do **not** keep an editable copy outside `plugins/` and sync it 
 documented practice and only creates drift. Bump `version` in `plugin.json` when publishing, and
 run `claude plugin validate` before doing so.
 
+The bump is its own commit, never folded into a feature or fix, and its message is the changelog
+entry: `build(core): release 0.6.0 Since 0.5.3: <what changed, user-visible first>`. Do not use
+`chore` anywhere, as a commit type or as a branch prefix; older history has it, but new commits must not.
+
 A plugin *installed* from the marketplace is a cache and does not track source edits — that needs
 `/plugin marketplace update`. Use `--plugin-dir` while iterating.
 
