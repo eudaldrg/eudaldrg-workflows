@@ -410,6 +410,13 @@ ENUMS = {
     "sessionWrap.mode": {"ask", "queue"},
 }
 
+# Keys a release dropped, with what replaced them. Still setting one is not an error (it is simply
+# ignored), but it is reported so the setting is not silently lost.
+REMOVED = {
+    "statusLine.costWarnUsd": "statusLine.costRateWarnUsdPerHr (the warning is now on $/hr)",
+    "statusLine.costCritUsd": "statusLine.costRateCritUsdPerHr (the warning is now on $/hr)",
+}
+
 TYPES = {
     "version": int,
     "init.toolFiles": list,
@@ -432,6 +439,11 @@ TYPES = {
     "gitDiff.delta.enabled": bool,
     "statusLine.showGitBranch": bool,
     "statusLine.showBurnRate": bool,
+    "statusLine.showCache": bool,
+    "statusLine.cacheWarnSeconds": int,
+    "statusLine.maxWidth": int,
+    "cpp.minClangFormatVersion": str,
+    "cpp.minClangTidyVersion": str,
     "statusLine.contextWarnPercent": int,
     "statusLine.contextCritPercent": int,
     "projects": dict,
@@ -452,6 +464,9 @@ def validate(merged: dict, loaded: list[tuple[str, dict]], strict: bool) -> list
                 "project: 'projects' registry belongs in the home layer only; it will be merged "
                 "but is not portable to other machines"
             )
+        for dotted, replacement in REMOVED.items():
+            if lookup(data, dotted)[1]:
+                notes.append(f"{name}: {dotted} is no longer read and is ignored; use {replacement}")
 
     for dotted, expected in TYPES.items():
         value, found = lookup(merged, dotted)
