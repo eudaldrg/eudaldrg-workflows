@@ -17,7 +17,7 @@ top-level `statusLine` key and leaves the rest of the file alone.
 `${CLAUDE_PLUGIN_ROOT}/scripts/wf_statusline.py` renders:
 
 ```
-<host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <state> [$<next>r|w] $<cost> ($<rate>/hr)
+<host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <state> [($<next>r|w)] $<cost> ($<rate>/hr)
 ```
 
 On a narrow terminal (e.g. a phone) the segments wrap onto extra rows instead of being

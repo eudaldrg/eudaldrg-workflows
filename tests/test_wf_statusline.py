@@ -16,17 +16,17 @@ def seg(cache, tokens=358_000, model=OPUS55):
 class CacheSegmentTest(unittest.TestCase):
     def test_warm_shows_remaining_and_read_cost(self):
         cache = {"caching_observed": True, "warm": True, "expires_at": NOW + 42 * 60, "ttl": "1h"}
-        self.assertEqual(seg(cache, 358_000), "cache 42m/1h $0.07r")
+        self.assertEqual(seg(cache, 358_000), "cache 42m/1h ($0.07r)")
 
     def test_cold_shows_write_cost_for_ttl(self):
         cache = {"caching_observed": True, "warm": False, "expires_at": NOW - 5, "ttl": "1h"}
-        self.assertEqual(seg(cache), "cache cold $2.86w")
+        self.assertEqual(seg(cache), "cache cold ($2.86w)")
         cache["ttl"] = "5m"
-        self.assertEqual(seg(cache), "cache cold $1.79w")
+        self.assertEqual(seg(cache), "cache cold ($1.79w)")
 
     def test_none_when_missing_or_unobserved(self):
-        self.assertEqual(seg(None), "cache none $2.86w")
-        self.assertEqual(seg({"caching_observed": False, "warm": True}), "cache none $2.86w")
+        self.assertEqual(seg(None), "cache none ($2.86w)")
+        self.assertEqual(seg({"caching_observed": False, "warm": True}), "cache none ($2.86w)")
 
     def test_none_and_cold_are_red_warm_is_not(self):
         self.assertIn(sl.RED, sl.cache_segment(None, 300, NOW, 1000, *OPUS55))
@@ -48,7 +48,7 @@ class CacheSegmentTest(unittest.TestCase):
     def test_build_line_always_has_cache(self):
         line = sl.build_line({"model": {"id": "claude-sonnet-5-5", "display_name": "Sonnet 5.5"},
                               "context_window": {"total_input_tokens": 100_000}}, {})
-        self.assertIn("cache none $0.40w", sl.ANSI_RE.sub("", line))
+        self.assertIn("cache none ($0.40w)", sl.ANSI_RE.sub("", line))
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render the shared status line from the JSON Claude Code pipes to stdin.
 
-    <host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <state> [$<next>r|w] $<cost> ($<rate>/hr)
+    <host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <state> [($<next>r|w)] $<cost> ($<rate>/hr)
 
 When the terminal is too narrow for that on one row (a phone), the segments wrap onto several
 rows — Claude Code renders every printed line as its own status row. Width comes from the tmux
@@ -135,7 +135,7 @@ def cache_segment(
         color, warm = (YELLOW if remaining < warn_seconds else ""), True
     text = wrap(state, color)
     cost = next_request_cost(tokens, model_id, display_name, warm, ttl)
-    return f"{text} {cost}" if cost else text
+    return f"{text} ({cost})" if cost else text
 
 
 def collapse_home(path: str) -> str:
