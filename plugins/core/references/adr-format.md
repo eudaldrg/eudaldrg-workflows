@@ -17,7 +17,7 @@ Write an ADR only if all three hold. `/core:simplify-design` applies the same te
    have an answer. A choice among roughly equivalent options with nothing to protect is a preference.
    Record it in the design doc and move on.
 3. **It cannot be a setting instead.** If the right value depends on the machine or the load (core
-   affinity, buffer sizes, which exchanges are enabled), the decision is "this is configurable", not
+   affinity, buffer sizes, which integrations are enabled), the decision is "this is configurable", not
    the value.
 
 Everything else goes in the design doc, which is meant to change as the project learns.
@@ -31,8 +31,8 @@ to be superseded. Prefer the change policy. Such a policy is usually a good ADR 
 
 ### Staged plans are one decision
 
-"v1: one core, one book. Target: sharded by symbol. Trigger: one core cannot keep up." The decision
-is the seam that makes the stage change cheap (books keyed by symbol behind per-feed queues), not the
+"v1: one worker, one queue. Target: sharded by tenant. Trigger: one worker cannot keep up." The
+decision is the seam that makes the stage change cheap (work keyed by tenant behind a router), not the
 v1 configuration. Write it staged so reaching the target is not a reversal.
 
 ## Status
