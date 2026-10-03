@@ -73,9 +73,10 @@ def format_remaining(seconds: int) -> str:
 
 
 # (match on lowercased model id/display name, input $/MTok, cache-read multiplier of input).
-# Order matters: the more specific "opus 5.5" must precede "opus 5". Fable 5.1 is not listed because
-# its input price is not recorded here; an unknown model shows the cache state without an amount.
+# Order matters: the more specific "opus 5.5" must precede "opus 5". Fable 5 is not listed because
+# its cache-read price is not recorded here; an unknown model shows the cache state without an amount.
 MODEL_PRICES = (
+    (("fable-5-1", "fable 5.1"), 10.0, 0.025),
     (("opus-5-5", "opus 5.5"), 4.0, 0.05),
     (("opus-5", "opus 5"), 5.0, 0.1),
     (("sonnet-5", "sonnet 5"), 2.0, 0.1),

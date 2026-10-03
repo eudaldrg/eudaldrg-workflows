@@ -34,13 +34,15 @@ class CacheSegmentTest(unittest.TestCase):
         self.assertNotIn(sl.RED, sl.cache_segment(warm, 300, NOW, 1000, *OPUS55))
 
     def test_unknown_model_keeps_state_drops_amount(self):
-        self.assertEqual(seg(None, model=("claude-fable-5-1", "Fable 5.1")), "cache none")
+        self.assertEqual(seg(None, model=("claude-fable-5", "Fable 5")), "cache none")
         self.assertEqual(seg(None, model=("", "")), "cache none")
 
     def test_no_context_drops_amount(self):
         self.assertEqual(seg(None, tokens=None), "cache none")
 
     def test_model_prices(self):
+        self.assertEqual(sl.model_price("claude-fable-5-1", "Fable 5.1"), (10.0, 0.025))
+        self.assertEqual(sl.model_price("claude-opus-5-5", "Opus 5.5"), (4.0, 0.05))
         self.assertEqual(sl.model_price("claude-opus-5", "Opus 5"), (5.0, 0.1))
         self.assertEqual(sl.model_price("claude-sonnet-5-5", ""), (2.0, 0.1))
         self.assertEqual(sl.model_price("claude-haiku-4-5-20251001", ""), (1.0, 0.1))
