@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render the shared status line from the JSON Claude Code pipes to stdin.
 
-    <host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <left>/<ttl> $<cost> ($<rate>/hr)
+    <host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <state> [$<next>r|w] $<cost> ($<rate>/hr)
 
 When the terminal is too narrow for that on one row (a phone), the segments wrap onto several
 rows — Claude Code renders every printed line as its own status row. Width comes from the tmux
@@ -72,22 +72,70 @@ def format_remaining(seconds: int) -> str:
     return f"{seconds}s"
 
 
-def cache_segment(cache: dict, warn_seconds: int, now: float) -> str | None:
-    """Time left on the prompt cache, or "cache cold" once it has expired.
+# (match on lowercased model id/display name, input $/MTok, cache-read multiplier of input).
+# Order matters: the more specific "opus 5.5" must precede "opus 5". Fable 5.1 is not listed because
+# its input price is not recorded here; an unknown model shows the cache state without an amount.
+MODEL_PRICES = (
+    (("opus-5-5", "opus 5.5"), 4.0, 0.05),
+    (("opus-5", "opus 5"), 5.0, 0.1),
+    (("sonnet-5", "sonnet 5"), 2.0, 0.1),
+    (("haiku-4-5", "haiku 4.5"), 1.0, 0.1),
+)
+WRITE_MULTIPLIER = {"5m": 1.25, "1h": 2.0}
+DEFAULT_WRITE_TTL = "1h"  # subscription default; used when no TTL is known (state "none")
 
-    Claude Code reports an absolute `expires_at` that moves forward on every request, so this
-    only stays accurate if the status line is re-run periodically (see `refreshInterval`).
-    """
-    if not cache.get("caching_observed"):
+
+def model_price(model_id: str, display_name: str) -> tuple[float, float] | None:
+    haystack = f"{model_id} {display_name}".lower()
+    for needles, price, read_mult in MODEL_PRICES:
+        if any(n in haystack for n in needles):
+            return price, read_mult
+    return None
+
+
+def next_request_cost(
+    tokens: int | None, model_id: str, display_name: str, warm: bool, ttl: str | None
+) -> str | None:
+    """What re-sending the existing context costs: `$0.07r` (cache read) or `$2.87w` (cache write)."""
+    price = model_price(model_id, display_name)
+    if not tokens or price is None:
         return None
+    input_price, read_mult = price
+    if warm:
+        return f"${tokens * input_price * read_mult / 1_000_000:.2f}r"
+    write_mult = WRITE_MULTIPLIER.get(ttl or "", WRITE_MULTIPLIER[DEFAULT_WRITE_TTL])
+    return f"${tokens * input_price * write_mult / 1_000_000:.2f}w"
+
+
+def cache_segment(
+    cache: dict | None,
+    warn_seconds: int,
+    now: float,
+    tokens: int | None = None,
+    model_id: str = "",
+    display_name: str = "",
+) -> str:
+    """Always-present cache state plus the next request's cost for the existing context.
+
+    `cache none` (red): nothing known or caching never observed; `cache cold` (red): expired;
+    `cache <left>/<ttl>`: warm. Claude Code reports an absolute `expires_at` that moves forward on
+    every request, so this only stays accurate if the status line is re-run periodically
+    (see `refreshInterval`).
+    """
+    cache = cache or {}
+    ttl = cache.get("ttl") or None
     expires_at = cache.get("expires_at")
     remaining = int(expires_at - now) if isinstance(expires_at, (int, float)) else 0
-    if not cache.get("warm") or remaining <= 0:
-        return wrap("cache cold", RED)
-    text = f"cache {format_remaining(remaining)}"
-    if cache.get("ttl"):
-        text += f"/{cache['ttl']}"
-    return wrap(text, YELLOW if remaining < warn_seconds else "")
+    if not cache.get("caching_observed"):
+        state, color, warm = "cache none", RED, False
+    elif not cache.get("warm") or remaining <= 0:
+        state, color, warm = "cache cold", RED, False
+    else:
+        state = f"cache {format_remaining(remaining)}" + (f"/{ttl}" if ttl else "")
+        color, warm = (YELLOW if remaining < warn_seconds else ""), True
+    text = wrap(state, color)
+    cost = next_request_cost(tokens, model_id, display_name, warm, ttl)
+    return f"{text} {cost}" if cost else text
 
 
 def collapse_home(path: str) -> str:
@@ -203,12 +251,18 @@ def build_line(payload: dict, merged: dict) -> str:
                 token_text += " " + wrap(f"({pct:.0f}%)", color_for(pct, warn, crit))
             segments.append(token_text)
 
-    cache = payload.get("prompt_cache")
-    if cache and cfg(merged, "statusLine.showCache", True):
-        warn_seconds = cfg(merged, "statusLine.cacheWarnSeconds", 300)
-        cache_text = cache_segment(cache, warn_seconds, time.time())
-        if cache_text:
-            segments.append(cache_text)
+    if cfg(merged, "statusLine.showCache", True):
+        model_info = payload.get("model", {})
+        segments.append(
+            cache_segment(
+                payload.get("prompt_cache"),
+                cfg(merged, "statusLine.cacheWarnSeconds", 300),
+                time.time(),
+                (payload.get("context_window") or {}).get("total_input_tokens"),
+                model_info.get("id") or "",
+                model_info.get("display_name") or "",
+            )
+        )
 
     cost = payload.get("cost", {})
     total_cost = cost.get("total_cost_usd")
