@@ -12,6 +12,7 @@ layer. Stdlib only — see wf_config.py for why.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -178,17 +179,21 @@ def target_triple() -> str:
     raise RuntimeError(f"no prebuilt difftastic for {system}/{platform.machine()}; use cargo")
 
 
-def resolve_version(requested: str) -> str:
-    if requested != "latest":
-        return requested
-    url = f"https://api.github.com/repos/{REPO}/releases/latest"
+def fetch_release(requested: str) -> dict:
+    path = "latest" if requested == "latest" else f"tags/{requested}"
+    url = f"https://api.github.com/repos/{REPO}/releases/{path}"
     with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response:
-        return json.load(response)["tag_name"]
+        return json.load(response)
 
 
 def install_difft(settings: dict) -> str:
-    version = resolve_version(settings["version"])
+    release = fetch_release(settings["version"])
+    version = release["tag_name"]
     asset = f"difft-{version}-{target_triple()}.tar.gz"
+    # GitHub records a sha256 for every uploaded release asset; refuse anything it cannot vouch for.
+    digest = next((a.get("digest") for a in release.get("assets", []) if a.get("name") == asset), None)
+    if not digest or not digest.startswith("sha256:"):
+        raise RuntimeError(f"release {version} lists no sha256 digest for {asset}; not installing it")
     url = f"https://github.com/{REPO}/releases/download/{version}/{asset}"
     print(f"downloading {url}")
     dest_dir: Path = settings["install_dir"]
@@ -196,7 +201,11 @@ def install_difft(settings: dict) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / asset
         with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response:
-            archive.write_bytes(response.read())
+            data = response.read()
+        actual = hashlib.sha256(data).hexdigest()
+        if actual != digest.removeprefix("sha256:"):
+            raise RuntimeError(f"{asset}: sha256 {actual} does not match the release's {digest}")
+        archive.write_bytes(data)
         with tarfile.open(archive) as tar:
             member = next(
                 (m for m in tar.getmembers() if m.isfile() and Path(m.name).name == "difft"), None
@@ -307,7 +316,12 @@ def cmd_remove(_: argparse.Namespace) -> int:
     path = include_file()
     ref = include_ref(path)
     if is_included(ref):
-        git_global("--fixed-value", "--unset-all", "include.path", ref)
+        # Match the value literally: `--fixed-value` needs git >= 2.30, so escape it as an ERE.
+        literal = "".join("\\" + c if c in ".^$*+?()[]{}|\\" else c for c in ref)
+        unset = git_global("--unset-all", "include.path", f"^{literal}$")
+        if unset.returncode != 0:
+            print(f"error: could not update ~/.gitconfig: {unset.stderr.strip()}", file=sys.stderr)
+            return ERR_CONFIG
     if path.is_file():
         path.unlink()
     print("removed the include and its file (the difft binary is left in place)")
