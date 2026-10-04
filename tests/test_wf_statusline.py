@@ -1,5 +1,8 @@
+import os
 import sys
+import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugins/core/scripts"))
@@ -51,6 +54,77 @@ class CacheSegmentTest(unittest.TestCase):
         line = sl.build_line({"model": {"id": "claude-sonnet-5-5", "display_name": "Sonnet 5.5"},
                               "context_window": {"total_input_tokens": 100_000}}, {})
         self.assertIn("cache none ($0.40w)", sl.ANSI_RE.sub("", line))
+
+
+SID = "c3bdb720-43a2-4d33-b283-347d32130803"
+
+
+class CavemanSegmentTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+        (self.dir / ".caveman-sessions").mkdir()
+
+    def write_session(self, content, sid=SID):
+        (self.dir / ".caveman-sessions" / f"{sid}.mode").write_bytes(content)
+
+    def mode(self, sid=SID):
+        return sl.caveman_mode(sid, self.dir)
+
+    def test_session_file_mode(self):
+        self.write_session(b"full")
+        self.assertEqual(self.mode(), "full")
+        self.write_session(b"Wenyan-Lite\n")
+        self.assertEqual(self.mode(), "wenyan-lite")
+
+    def test_session_file_wins_over_global_mirror(self):
+        (self.dir / ".caveman-active").write_bytes(b"full")
+        self.write_session(b"lite")
+        self.assertEqual(self.mode(), "lite")
+        self.write_session(b"off")
+        self.assertIsNone(self.mode())
+
+    def test_global_mirror_only_without_session_id(self):
+        (self.dir / ".caveman-active").write_bytes(b"ultra")
+        self.assertEqual(self.mode(None), "ultra")
+        self.assertEqual(self.mode("../escape"), "ultra")
+        self.assertEqual(self.mode(123), "ultra")
+        # A window with its own id but no session file is a window without caveman.
+        self.assertIsNone(self.mode())
+
+    def test_absent_malformed_or_unknown_renders_nothing(self):
+        self.assertIsNone(sl.caveman_mode(SID, self.dir / "missing"))
+        self.assertIsNone(self.mode())
+        for content in (b"", b"off", b"bogus", b"\x1b[31mfull", b"\xff\xfe", b"f" * 200):
+            self.write_session(content)
+            self.assertIsNone(self.mode(), content)
+
+    def test_symlink_refused(self):
+        target = self.dir / "target"
+        target.write_bytes(b"full")
+        (self.dir / ".caveman-sessions" / f"{SID}.mode").symlink_to(target)
+        self.assertIsNone(self.mode())
+
+    def test_directory_in_place_of_file(self):
+        (self.dir / ".caveman-sessions" / f"{SID}.mode").mkdir()
+        self.assertIsNone(self.mode())
+
+    def build(self, merged=None):
+        payload = {"session_id": SID, "model": {"display_name": "Opus 5.5"}, "effort": {"level": "high"}}
+        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.dir)}):
+            return sl.build_line(payload, merged or {})
+
+    def test_build_line_badge_after_model(self):
+        self.write_session(b"full")
+        line = self.build()
+        self.assertIn(f"{sl.ORANGE}[CAVEMAN:full]{sl.RESET}", line)
+        self.assertIn("Opus 5.5 [high] [CAVEMAN:full]", sl.ANSI_RE.sub("", line))
+
+    def test_build_line_without_caveman_or_when_disabled(self):
+        self.assertNotIn("CAVEMAN", self.build())
+        self.write_session(b"full")
+        self.assertNotIn("CAVEMAN", self.build({"statusLine": {"showCaveman": False}}))
 
 
 if __name__ == "__main__":

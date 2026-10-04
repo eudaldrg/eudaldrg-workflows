@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render the shared status line from the JSON Claude Code pipes to stdin.
 
-    <host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <state> [($<next>r|w)] $<cost> ($<rate>/hr)
+    <host>:<wd> (<branch><dirty>) <model> [<effort>] [CAVEMAN:<level>] <used>/<cap> (<pct>%) cache <state> [($<next>r|w)] $<cost> ($<rate>/hr)
 
 When the terminal is too narrow for that on one row (a phone), the segments wrap onto several
 rows — Claude Code renders every printed line as its own status row. Width comes from the tmux
@@ -29,6 +29,7 @@ import wf_config  # noqa: E402
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
 RED = "\033[31m"
+ORANGE = "\033[38;5;172m"  # the color caveman's own badge uses
 RESET = "\033[0m"
 
 GIT_TIMEOUT = 2
@@ -139,6 +140,45 @@ def cache_segment(
     return f"{text} ({cost})" if cost else text
 
 
+# The caveman plugin's modes, as whitelisted by its caveman-statusline.sh. "off" is durable
+# deactivation and renders nothing, same as an absent file.
+CAVEMAN_MODES = frozenset(
+    ("lite", "full", "ultra", "wenyan-lite", "wenyan", "wenyan-full", "wenyan-ultra",
+     "commit", "review", "compress")
+)
+CAVEMAN_SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
+CAVEMAN_MODE_JUNK_RE = re.compile(r"[^a-z0-9-]")
+
+
+def caveman_mode(session_id: object, config_dir: Path) -> str | None:
+    """This window's caveman mode, or None when caveman is off or not installed.
+
+    Mirrors caveman's caveman-statusline.sh: state is `<config>/.caveman-sessions/<id>.mode`,
+    one short word per window, with `<config>/.caveman-active` as a machine-wide mirror of the
+    last write. Unlike caveman's script, the mirror is only consulted when there is no usable
+    session id: this status line also runs in windows where caveman is not loaded, and those
+    have no session file, so falling back would show another window's mode.
+    """
+    if isinstance(session_id, str) and CAVEMAN_SESSION_ID_RE.fullmatch(session_id):
+        flag = config_dir / ".caveman-sessions" / f"{session_id}.mode"
+    else:
+        flag = config_dir / ".caveman-active"
+    try:
+        # Refuse symlinks and cap the read, as caveman does: the bytes reach the terminal.
+        if flag.is_symlink() or not flag.is_file():
+            return None
+        with flag.open("rb") as f:
+            raw = f.read(64)
+    except OSError:
+        return None
+    mode = CAVEMAN_MODE_JUNK_RE.sub("", raw.decode("ascii", "ignore").lower())
+    return mode if mode in CAVEMAN_MODES else None
+
+
+def caveman_config_dir() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+
+
 def collapse_home(path: str) -> str:
     home = str(Path.home())
     if path == home:
@@ -238,6 +278,11 @@ def build_line(payload: dict, merged: dict) -> str:
     model_text = " ".join(part for part in (model, f"[{effort}]" if effort else None) if part)
     if model_text:
         segments.append(model_text)
+
+    if cfg(merged, "statusLine.showCaveman", True):
+        mode = caveman_mode(payload.get("session_id"), caveman_config_dir())
+        if mode:
+            segments.append(wrap(f"[CAVEMAN:{mode}]", ORANGE))
 
     context = payload.get("context_window")
     if context:

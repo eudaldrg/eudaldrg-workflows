@@ -440,6 +440,7 @@ TYPES = {
     "statusLine.showGitBranch": bool,
     "statusLine.showBurnRate": bool,
     "statusLine.showCache": bool,
+    "statusLine.showCaveman": bool,
     "statusLine.cacheWarnSeconds": int,
     "statusLine.maxWidth": int,
     "cpp.minClangFormatVersion": str,

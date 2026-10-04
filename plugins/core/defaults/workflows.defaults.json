@@ -88,6 +88,7 @@
     "showGitBranch": true,
     "showBurnRate": true,
     "showCache": true,
+    "showCaveman": true,
     "cacheWarnSeconds": 300,
     "maxWidth": 0,
     "contextWarnPercent": 60,

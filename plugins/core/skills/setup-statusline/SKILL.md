@@ -1,6 +1,6 @@
 ---
 name: setup-statusline
-description: Install or refresh the shared Claude Code status line (host:wd, git branch, model, effort, context usage, cost) into ~/.claude/settings.json, pointed at this plugin's script. Use when asked to set up, enable, update, or fix the status line/status bar, or after the plugin moves/updates and the status line stops working.
+description: Install or refresh the shared Claude Code status line (host:wd, git branch, model, effort, caveman mode, context usage, cost) into ~/.claude/settings.json, pointed at this plugin's script. Use when asked to set up, enable, update, or fix the status line/status bar, or after the plugin moves/updates and the status line stops working.
 argument-hint: "[--force]"
 allowed-tools: Read, Bash
 ---
@@ -17,7 +17,7 @@ top-level `statusLine` key and leaves the rest of the file alone.
 `${CLAUDE_PLUGIN_ROOT}/scripts/wf_statusline.py` renders:
 
 ```
-<host>:<wd> (<branch><dirty>) <model> [<effort>] <used>/<cap> (<pct>%) cache <state> [($<next>r|w)] $<cost> ($<rate>/hr)
+<host>:<wd> (<branch><dirty>) <model> [<effort>] [CAVEMAN:<level>] <used>/<cap> (<pct>%) cache <state> [($<next>r|w)] $<cost> ($<rate>/hr)
 ```
 
 On a narrow terminal (e.g. a phone) the segments wrap onto extra rows instead of being
@@ -31,6 +31,14 @@ by a phone attaching — keeps the row layout it last rendered until something h
 `cache <left>/<ttl>` counts down the prompt cache's remaining lifetime, turns yellow under
 `statusLine.cacheWarnSeconds` (default 300) and shows red `cache cold` once it has expired and red `cache none` when no caching has been observed. It is always shown, followed by what the next request costs for the existing context: `$…r` (cache read, warm) or `$…w` (cache write, cold/none; 1h TTL assumed when unknown). The amount is omitted for a model with no known price; hide it
 with `statusLine.showCache: false`. That is why the `refreshInterval` above matters.
+
+`[CAVEMAN:<level>]` (orange) appears while the third-party caveman plugin is active in this
+window. Claude Code runs only one `statusLine` command, so this one stands in for caveman's own
+`[CAVEMAN]` badge. It reads caveman's per-window state, `$CLAUDE_CONFIG_DIR/.caveman-sessions/<session_id>.mode`.
+The machine-wide `.caveman-active` mirror is read only when the input carries no session id,
+because a window without caveman has no session file and would otherwise show another window's
+mode. `off`, a missing file, or anything that isn't a known caveman level shows nothing. Hide it
+with `statusLine.showCaveman: false`.
 
 Every segment after `<host>:<wd>` drops out independently when its data isn't available (no git
 repo, model without an effort parameter, session too short for a burn rate). Thresholds for the
