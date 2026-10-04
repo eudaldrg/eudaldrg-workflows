@@ -120,3 +120,11 @@ Install through the marketplace:
 ```
 
 Skills are namespaced by plugin name, so they appear as `/core:<skill-name>`.
+
+Lean startup context (`references/lean-context.md` has the reasoning and the measurements):
+
+- `/core:setup-lean-context` writes three keys into `~/.claude/settings.json` — deny `Artifact`,
+  `ENABLE_TOOL_SEARCH=true`, prompt suggestions off — with `status`, `--dry-run` and `revert`.
+- `/core:html-design` and `/core:html-diagramming` write pages and diagrams as local `.html`
+  files instead of artifacts. They load the built-in `artifact-design` / `artifact-diagramming`
+  skills and override only the hosted-artifact parts, so upstream updates flow through.
