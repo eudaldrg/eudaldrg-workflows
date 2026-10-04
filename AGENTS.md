@@ -128,3 +128,6 @@ Lean startup context (`references/lean-context.md` has the reasoning and the mea
 - `/core:html-design` and `/core:html-diagramming` write pages and diagrams as local `.html`
   files instead of artifacts. They load the built-in `artifact-design` / `artifact-diagramming`
   skills and override only the hosted-artifact parts, so upstream updates flow through.
+
+Output style: the third-party caveman plugin is on trial at project scope; `references/caveman-style.md`
+has what it does, what it costs, the evidence so far, and how to install or undo it.
