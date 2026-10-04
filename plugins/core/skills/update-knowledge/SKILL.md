@@ -1,6 +1,6 @@
 ---
 name: update-knowledge
-description: Write or refresh project documentation about a component or an activity, on the two-axis docs/modules and docs/tasks convention. Use after learning something worth keeping, when a doc has gone stale, or when asked to document a module, a procedure, or how something works in this repo.
+description: Write or refresh this project's documentation about a component or an activity, on the two-axis docs/modules and docs/tasks convention. Use without being asked whenever the session added or learned something about this project that its docs do not cover — a feature, a procedure, a measured cost, a gotcha — before reporting the work done; also when a doc has gone stale, or when asked to document a module, a procedure, or how something works. Writes the files directly — no proposal, no confirmation, no commit.
 argument-hint: "[what to document]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 ---
@@ -83,8 +83,8 @@ move is to leave the signal and mention it, or set `verified` explicitly.
 ## Hard rules
 
 - Never restructure `decisions/` or write ADRs from here.
-- Never rewrite `AGENTS.md`. If a new doc deserves a mention in its prose index, draft the paragraph in
-  the surrounding style and let the user place it.
+- Never restructure `AGENTS.md`. If it indexes the docs (a table or a prose list), add the new doc's
+  entry in the surrounding style, so the index does not silently fall behind.
 - Never commit. Write the files and report what changed; committing is the user's call.
 - Never fabricate `sources` globs to make a doc look thorough. A wrong glob produces false staleness
   forever after.

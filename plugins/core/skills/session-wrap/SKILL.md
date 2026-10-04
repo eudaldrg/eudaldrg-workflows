@@ -48,12 +48,13 @@ something to report.
 
 - **Already covered** — an existing doc, `AGENTS.md` line, or memory rule already says this. Say so and
   propose nothing.
-- **`local`** — true only of this project, or of how to work in it.
-  - Doc-shaped (a component, a procedure, a decision) → the proposal is an `/core:update-knowledge`
-    invocation, not a hand-authored diff. That skill owns axis-picking, frontmatter, and
-    extend-before-create; duplicating its rules here is exactly the drift this skill exists to avoid
-    elsewhere.
-  - Not doc-shaped (an `AGENTS.md`-level convention) → propose a direct diff against that file.
+- **`local`** — true only of this project, or of how to work in it. Apply it now; no proposal, no ask,
+  no log line. The project's own docs are part of the work, not a change to someone else's repo.
+  - Doc-shaped (a component, a procedure, a decision) → invoke `/core:update-knowledge`. That skill
+    owns axis-picking, frontmatter, and extend-before-create; duplicating its rules here is exactly
+    the drift this skill exists to avoid elsewhere.
+  - Not doc-shaped (an `AGENTS.md`-level convention) → edit that project's `AGENTS.md` directly, in
+    the surrounding style.
 - **`shared`** — about how any agent using this plugin should behave, in any project. Propose a direct
   diff against this plugin repo, same path as `auto-learn`'s `shared` proposals.
 
@@ -64,26 +65,29 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_knowledge.py" list [--where <project>]
 ```
 
 An empty list is not a blocker. `/core:update-knowledge` creates the first doc on an axis the same way
-it extends an existing one — say plainly that this would be the project's first doc on that axis, and
-propose it anyway.
+it extends an existing one — say plainly that this is the project's first doc on that axis.
 
-## Propose, then ask
+## Apply `local`, propose `shared`
 
-Read `${CLAUDE_PLUGIN_ROOT}/references/propose-then-ask.md` for the shared scope/ask/apply/commit
-mechanics. This skill's proposals additionally carry:
+A `local` finding whose project is not the one this session is working in (a `--session` review of
+another repo) is still `local`: resolve its path via `wf_config.py projects --json` and apply it there.
 
-- **what actually happened** — quoted from this conversation, or cited from the `--session` transcript
-  (tool call, commit, or exact user text)
-- for a `local`, doc-shaped finding: the exact `/core:update-knowledge` invocation to run on yes, not a
-  diff this skill authored itself
+Never commit a `local` change — write the files and report what changed, with the evidence (quoted
+from this conversation, or cited from the `--session` transcript), so the user reviews it in
+`git diff` and commits it.
 
-`sessionWrap.mode` (`ask` default, `queue`) controls ask-vs-queue exactly like `autoLearn.mode`.
+`shared` findings go through `${CLAUDE_PLUGIN_ROOT}/references/propose-then-ask.md` for the
+scope/ask/apply/commit mechanics. This skill's proposals additionally carry **what actually
+happened** — quoted from this conversation, or cited from the `--session` transcript (tool call,
+commit, or exact user text). `sessionWrap.mode` (`ask` default, `queue`) controls ask-vs-queue for
+them exactly like `autoLearn.mode`; it has no effect on `local` findings.
 
 ## Hard rules
 
 - Never write doc content yourself for a `local`, doc-shaped finding. Invoke `/core:update-knowledge`.
   This skill decides *whether* something should be documented, not *how*.
+- Never log a `local` finding to `proposals.jsonl`. The changed file is the record.
 - There is no Stop hook for this skill. Every candidate here came from a live, human-in-the-loop read
   of a transcript — never treat one as pre-reviewed the way a hook-produced candidate would be.
 - Never fabricate a finding to avoid reporting "nothing to propose."
-- Everything else — see `references/propose-then-ask.md`.
+- Everything else about `shared` proposals — see `references/propose-then-ask.md`.

@@ -1,9 +1,13 @@
 # Propose, then ask
 
 Shared mechanics for any skill that finds a change worth making to a repo it did not open specifically
-to edit — currently `auto-learn` and `session-wrap`. The rule this exists to keep is: **a proposal is
-safe to apply the moment a human confirms the exact diff, in this conversation, this run** — nothing
-more is needed, and nothing less is enough.
+to edit — currently `auto-learn`, and `session-wrap` for its `shared` findings. The rule this exists to
+keep is: **a proposal is safe to apply the moment a human confirms the exact diff, in this
+conversation, this run** — nothing more is needed, and nothing less is enough.
+
+A project's own docs and `AGENTS.md`, updated because of work done in that project, are not proposals.
+`session-wrap` applies its `local` findings directly and never logs them here; `update-knowledge` never
+proposes at all.
 
 ## Why this is safe, and where the line is
 
