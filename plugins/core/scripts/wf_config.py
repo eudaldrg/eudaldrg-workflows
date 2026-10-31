@@ -405,6 +405,7 @@ ENUMS = {
     "plan.format": {"markdown", "html"},
     "briefing.format": {"markdown", "html"},
     "cpp.driftCheck": {"off", "warn", "block"},
+    "git.forge": {"auto", "github", "none"},
     "git.commitStyle": {"conventional", "free"},
     "autoLearn.mode": {"ask", "queue"},
     "sessionWrap.mode": {"ask", "queue"},
@@ -445,6 +446,18 @@ TYPES = {
     "statusLine.maxWidth": int,
     "cpp.minClangFormatVersion": str,
     "cpp.minClangTidyVersion": str,
+    "implement.simplifyBeforePush": bool,
+    "cpp.repo.cxxStandard": int,
+    "cpp.repo.compilerFloor": dict,
+    "cpp.repo.checks.cppcheck": bool,
+    "cpp.repo.checks.sanitizers.asanUbsan": bool,
+    "cpp.repo.checks.sanitizers.tsan": bool,
+    "cpp.repo.checks.memoryCap": bool,
+    "cpp.repo.tools": dict,
+    "cpp.repo.ci.matrix": list,
+    "git.integrationBranch": str,
+    "git.releaseBranch": str,
+    "git.protection.branches": dict,
     "statusLine.contextWarnPercent": int,
     "statusLine.contextCritPercent": int,
     "projects": dict,
@@ -485,6 +498,25 @@ def validate(merged: dict, loaded: list[tuple[str, dict]], strict: bool) -> list
         value, found = lookup(merged, dotted)
         if found and value not in allowed:
             problems.append(f"{dotted}: {value!r} not one of {sorted(allowed)}")
+
+    required, found = lookup(merged, "git.protection.requiredChecks")
+    if found and required != "auto" and not (
+        isinstance(required, list) and all(isinstance(item, str) for item in required)
+    ):
+        problems.append("git.protection.requiredChecks: expected \"auto\" or a list of strings")
+
+    matrix, found = lookup(merged, "cpp.repo.ci.matrix")
+    if found and isinstance(matrix, list):
+        for position, cell in enumerate(matrix):
+            if not isinstance(cell, dict) or not {"os", "compiler"} <= set(cell):
+                problems.append(f"cpp.repo.ci.matrix[{position}]: needs 'os' and 'compiler'")
+            elif cell["compiler"] not in {"gcc", "clang", "msvc"}:
+                problems.append(
+                    f"cpp.repo.ci.matrix[{position}].compiler: {cell['compiler']!r} not one of "
+                    "['clang', 'gcc', 'msvc']"
+                )
+            elif cell["compiler"] != "msvc" and "version" not in cell:
+                problems.append(f"cpp.repo.ci.matrix[{position}]: gcc/clang need a 'version'")
 
     checks, found = lookup(merged, "implement.checks")
     if found and isinstance(checks, list):
