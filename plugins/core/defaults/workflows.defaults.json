@@ -43,6 +43,13 @@
         "scopedCmd": "pre-commit run --files {files}",
         "when": "exists:.pre-commit-config.yaml",
         "blocking": true
+      },
+      {
+        "id": "sanitizers",
+        "order": 40,
+        "cmd": "pre-commit run --all-files --hook-stage pre-push",
+        "when": "exists:scripts/run_sanitizers.py",
+        "blocking": true
       }
     ]
   },
