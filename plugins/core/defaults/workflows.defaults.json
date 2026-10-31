@@ -141,10 +141,8 @@
     "releaseBranch": "main",
     "protection": {
       "requiredChecks": "auto",
-      "branches": {
-        "main": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false, "enforceAdmins": true },
-        "dev": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false, "enforceAdmins": true }
-      }
+      "default": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false, "enforceAdmins": true },
+      "branches": {}
     }
   },
 

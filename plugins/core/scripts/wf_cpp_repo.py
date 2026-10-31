@@ -523,10 +523,6 @@ def describe(kinds: dict[str, str]) -> str:
 # Only GitHub has one. Every write goes through `protect --apply --branch B`, one branch at a time,
 # so the skill can show the diff and ask before each.
 
-POLICY_DEFAULTS = {"requirePR": True, "approvals": 0, "allowForcePush": False,
-                   "allowDeletion": False, "linearHistory": False, "enforceAdmins": True}
-
-
 def gh_api(args: list[str], payload: dict | None = None) -> tuple[int, str, str]:
     """Run `gh api`. Tests replace this function."""
     cmd = ["gh", "api", *args]
@@ -539,9 +535,9 @@ def gh_api(args: list[str], payload: dict | None = None) -> tuple[int, str, str]
 
 
 def policy_for(settings: Settings, branch: str, forge: dict) -> dict:
-    protection = settings.git.get("protection", {}) or {}
-    policy = {**POLICY_DEFAULTS, **(protection.get("branches", {}).get(branch) or {})}
-    required = protection.get("requiredChecks", "auto")
+    protection = settings.git["protection"]
+    policy = {**protection["default"], **(protection["branches"].get(branch) or {})}
+    required = protection["requiredChecks"]
     if required == "auto":
         required = ci_job_names(settings) if forge["forge"] == "github" else []
     policy["requiredChecks"] = sorted(required)
@@ -549,8 +545,9 @@ def policy_for(settings: Settings, branch: str, forge: dict) -> dict:
 
 
 def protected_branches(settings: Settings) -> list[str]:
-    configured = list((settings.git.get("protection", {}) or {}).get("branches", {}) or {})
-    return configured or [settings.release, settings.integration]
+    """The release and integration branches, plus any other branch with its own policy entry."""
+    branches = [settings.release, settings.integration, *settings.git["protection"]["branches"]]
+    return list(dict.fromkeys(branches))
 
 
 def github_payload(policy: dict) -> dict:

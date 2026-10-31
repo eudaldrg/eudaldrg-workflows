@@ -29,7 +29,9 @@ Two things are forge-specific, and both go through an adapter:
 - **CI file.** Kept a thin wrapper: install a toolchain, then call `cmake`/`ctest` or
   `pre-commit run`. All logic lives in the repo's scripts, which is what makes another adapter
   cheap and keeps CI and local hooks from disagreeing.
-- **Branch protection.** `git.protection` is a neutral policy (`requirePR`, `approvals`,
+- **Branch protection.** `git.protection` is a neutral policy: one `default` applied to the
+  release and integration branches by their configured names, plus per-branch overrides in
+  `branches` (`requirePR`, `approvals`,
   `requiredChecks`, `allowForcePush`, `allowDeletion`, `linearHistory`, `enforceAdmins`); the
   adapter translates it into that forge's API.
 

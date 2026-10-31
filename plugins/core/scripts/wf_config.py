@@ -457,6 +457,7 @@ TYPES = {
     "cpp.repo.ci.matrix": list,
     "git.integrationBranch": str,
     "git.releaseBranch": str,
+    "git.protection.default": dict,
     "git.protection.branches": dict,
     "statusLine.contextWarnPercent": int,
     "statusLine.contextCritPercent": int,

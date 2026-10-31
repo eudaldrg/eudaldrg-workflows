@@ -29,9 +29,10 @@ class CppRepoConfigTest(unittest.TestCase):
         self.assertTrue(checks["cppcheck"])
         self.assertFalse(checks["sanitizers"]["tsan"])
         self.assertFalse(checks["memoryCap"])
-        for policy in defaults["git"]["protection"]["branches"].values():
-            self.assertEqual(policy["approvals"], 0)
-            self.assertFalse(policy["linearHistory"])
+        policy = defaults["git"]["protection"]["default"]
+        self.assertEqual(policy["approvals"], 0)
+        self.assertFalse(policy["linearHistory"])
+        self.assertEqual(defaults["git"]["protection"]["branches"], {})
         self.assertTrue(defaults["implement"]["simplifyBeforePush"])
 
     def test_bad_forge_rejected(self):

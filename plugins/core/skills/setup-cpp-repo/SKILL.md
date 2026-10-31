@@ -79,7 +79,9 @@ Bump `templates/cpp-repo/VERSION` in the same change whenever generated output c
 
 ## Forge protection
 
-The policy is forge-neutral (`git.protection`); the forge comes from the `origin` URL, overridable
+The policy is forge-neutral: `git.protection.default` applies to `git.releaseBranch` and
+`git.integrationBranch`, and `git.protection.branches.<name>` overrides keys for one branch (or adds
+another branch). The forge comes from the `origin` URL, overridable
 with `git.forge` (`auto` | `github` | `none`). Only GitHub has an adapter. For any other forge,
 `protect` prints the policy as a checklist for the user to set by hand, and no CI file is generated.
 

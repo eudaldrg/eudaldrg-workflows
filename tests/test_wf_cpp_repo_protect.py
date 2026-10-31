@@ -83,6 +83,16 @@ class PolicyTest(RepoCase):
         self.assertTrue(payload["enforce_admins"])
         self.assertEqual(payload["required_status_checks"]["contexts"], JOBS)
 
+    def test_branches_follow_configured_names(self):
+        self.config({"git": {"releaseBranch": "master", "integrationBranch": "develop",
+                             "protection": {"branches": {"develop": {"approvals": 1},
+                                                         "staging": {}}}}})
+        settings = self.settings()
+        self.assertEqual(cr.protected_branches(settings), ["master", "develop", "staging"])
+        forge = cr.detect_forge(settings)
+        self.assertEqual(cr.policy_for(settings, "develop", forge)["approvals"], 1)
+        self.assertEqual(cr.policy_for(settings, "master", forge)["approvals"], 0)
+
     def test_explicit_required_checks(self):
         self.config({"git": {"protection": {"requiredChecks": ["lint"]}}})
         settings = self.settings()
