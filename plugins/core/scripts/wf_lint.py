@@ -195,10 +195,13 @@ def header(version: str, base_hash: str, override_hash: str, body: str, sources:
 
 
 def split_header(text: str) -> tuple[str, str]:
+    """Header ends at the `wf-generated-sha256` stamp, so a body may start with comments."""
     lines = text.splitlines(keepends=True)
     cut = 0
     while cut < len(lines) and lines[cut].lstrip().startswith("#"):
         cut += 1
+        if lines[cut - 1].lstrip("# ").startswith("wf-generated-sha256:"):
+            break
     return "".join(lines[:cut]), "".join(lines[cut:]).lstrip("\n")
 
 

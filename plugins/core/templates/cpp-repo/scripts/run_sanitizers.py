@@ -53,7 +53,9 @@ def main(argv: list[str] | None = None) -> int:
         preset = PRESETS[variant]
         print(f"==> {variant}: preset {preset}", flush=True)
         try:
-            run(["cmake", "--preset", preset], env)
+            # Configure once; `cmake --build` reconfigures by itself when CMake inputs change.
+            if not (ROOT / "build" / preset / "CMakeCache.txt").is_file():
+                run(["cmake", "--preset", preset], env)
             run(["cmake", "--build", "--preset", preset, "--target", "project_tests"], env)
             run(["ctest", "--preset", preset, "-j", jobs], env)
         except subprocess.CalledProcessError as exc:

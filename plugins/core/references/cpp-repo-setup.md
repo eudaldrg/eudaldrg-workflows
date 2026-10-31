@@ -46,7 +46,7 @@ tree, and a protection mistake (a required check that never runs) blocks every P
 |---|---|---|
 | commit | clang-format, clang-tidy, cppcheck, incremental build | Fast. The build catches link errors and breaks in files the commit did not touch, which clang-tidy does not. |
 | push | tests under each sanitizer variant | Slow; catches use-after-free and data races, the bugs that otherwise go unnoticed. |
-| CI | both stages on Linux; build+test on every matrix compiler | The only gate that cannot be skipped with `--no-verify`. |
+| CI | both stages on Linux; build+test on every matrix compiler | The only gate that cannot be skipped with `--no-verify`. The lint job skips the `build` hook (`SKIP=build`) because the test job builds the same preset. |
 
 Lint and sanitizers run once, on Linux. Lint output does not depend on the OS, and MSVC has only
 ASan, so repeating either on every matrix cell would add CI time and no signal.

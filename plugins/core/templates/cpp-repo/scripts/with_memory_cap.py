@@ -44,6 +44,8 @@ def main(argv: list[str]) -> int:
             print("with_memory_cap: no systemd user session, running without a memory cap",
                   file=sys.stderr)
             os.environ["WITH_MEMORY_CAP_WARNED"] = "1"
+    if os.name == "posix":
+        os.execvp(cmd[0], cmd)  # no Python parent left waiting for every test
     return subprocess.run(cmd, check=False).returncode
 
 

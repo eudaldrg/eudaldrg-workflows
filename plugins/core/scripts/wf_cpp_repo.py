@@ -15,6 +15,7 @@ URL or `git.forge`. Only GitHub has one; any other forge gets no CI file and a p
 from __future__ import annotations
 
 import argparse
+import copy
 import difflib
 import json
 import re
@@ -56,14 +57,14 @@ class Settings:
 
     @property
     def integration(self) -> str:
-        return str(self.git.get("integrationBranch", "dev"))
+        return str(self.git["integrationBranch"])
 
     @property
     def release(self) -> str:
-        return str(self.git.get("releaseBranch", "main"))
+        return str(self.git["releaseBranch"])
 
     def sanitizer_variants(self) -> list[str]:
-        enabled = self.repo.get("checks", {}).get("sanitizers", {})
+        enabled = self.repo["checks"]["sanitizers"]
         return [variant for key, variant in SANITIZER_VARIANTS if enabled.get(key)]
 
     def config_hash(self) -> str:
@@ -149,19 +150,20 @@ def project_name(settings: Settings, explicit: str | None) -> str:
 
 
 def values(settings: Settings, name: str | None) -> dict[str, str]:
-    floor = settings.repo.get("compilerFloor", {})
+    repo = settings.repo
+    floor = repo["compilerFloor"]
     return {
         "project_name": project_name(settings, name),
-        "cxx_standard": str(settings.repo.get("cxxStandard", 23)),
-        "gcc_floor": str(floor.get("gcc", "14")),
-        "clang_floor": str(floor.get("clang", "18")),
-        "msvc_floor": str(floor.get("msvc", "17.8")),
-        "msvc_floor_version": str(msvc_version(str(floor.get("msvc", "17.8")))),
-        "googletest_tag": str(settings.repo.get("tools", {}).get("googletest", "v1.18.0")),
-        "memory_cap_default": "ON" if settings.repo.get("checks", {}).get("memoryCap") else "OFF",
+        "cxx_standard": str(repo["cxxStandard"]),
+        "gcc_floor": str(floor["gcc"]),
+        "clang_floor": str(floor["clang"]),
+        "msvc_floor": str(floor["msvc"]),
+        "msvc_floor_version": str(msvc_version(str(floor["msvc"]))),
+        "googletest_tag": str(repo["tools"]["googletest"]),
+        "memory_cap_default": "ON" if repo["checks"]["memoryCap"] else "OFF",
         "integration_branch": settings.integration,
         "release_branch": settings.release,
-        "branch_prefix": str(settings.git.get("branchPrefix", "feature/")),
+        "branch_prefix": str(settings.git["branchPrefix"]),
     }
 
 
@@ -190,8 +192,7 @@ def project_config_additions(settings: Settings, existing: dict) -> dict:
     if not (existing.get("cpp") or {}).get("enabled"):
         additions.setdefault("cpp", {})["enabled"] = True
     git = existing.get("git") or {}
-    protected = list(git.get("protectedBranches", [])) + list(git.get("protectedBranches+", []))
-    if settings.integration not in protected and "protectedBranches" not in git:
+    if "protectedBranches" not in git and settings.integration not in git.get("protectedBranches+", []):
         additions.setdefault("git", {})["protectedBranches+"] = [settings.integration]
     return additions
 
@@ -214,8 +215,7 @@ def scaffold_actions(settings: Settings, name: str | None) -> list[dict]:
     if not agents.exists():
         actions.append({"path": "AGENTS.md", "action": "write",
                         "content": f"# {subs['project_name']}\n\n{section}"})
-    elif AGENTS_HEADING not in agents.read_text(encoding="utf-8"):
-        current = agents.read_text(encoding="utf-8")
+    elif AGENTS_HEADING not in (current := agents.read_text(encoding="utf-8")):
         actions.append({"path": "AGENTS.md", "action": "append",
                         "content": current.rstrip("\n") + "\n\n" + section})
     else:
@@ -227,14 +227,10 @@ def scaffold_actions(settings: Settings, name: str | None) -> list[dict]:
         actions.append({"path": ".gitignore", "action": "append" if lines else "write",
                         "content": "\n".join([*lines, "build/"]) + "\n"})
 
-    config_path = settings.root / ".claude" / "workflows.json"
-    try:
-        existing = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
-    except json.JSONDecodeError as exc:
-        raise SetupError(f"{config_path}: {exc}") from exc
+    existing = wf_config.read_layer(wf_config.layer_paths(str(settings.root))["project"])
     additions = project_config_additions(settings, existing)
     if additions:
-        merged = json.loads(json.dumps(existing))
+        merged = copy.deepcopy(existing)
         for key, sub in additions.items():
             merged.setdefault(key, {}).update(sub)
         actions.append({"path": ".claude/workflows.json",
@@ -247,9 +243,8 @@ def scaffold_actions(settings: Settings, name: str | None) -> list[dict]:
 
 
 def precommit_body(settings: Settings) -> str:
-    tools = settings.repo.get("tools", {})
-    checks = settings.repo.get("checks", {})
-    # The body must not start with a comment: split_header() reads leading comments as header.
+    tools = settings.repo["tools"]
+    checks = settings.repo["checks"]
     lines = [
         "default_stages: [pre-commit]",
         "# Install both stages once per clone:",
@@ -258,7 +253,7 @@ def precommit_body(settings: Settings) -> str:
         "# once first. docs/tasks/testing.md has what each hook is for.",
         "repos:",
         "  - repo: https://github.com/pre-commit/mirrors-clang-format",
-        f"    rev: v{tools.get('clangFormat', '21.1.8')}",
+        f"    rev: v{tools['clangFormat']}",
         "    hooks:",
         "      - id: clang-format",
         "        types_or: [c++, c]",
@@ -271,10 +266,10 @@ def precommit_body(settings: Settings) -> str:
         "        # warning flags clang-tidy does not know.",
         "        entry: clang-tidy -p build/debug --quiet --extra-arg=-Wno-unknown-warning-option",
         "        language: python",
-        f"        additional_dependencies: ['clang-tidy=={tools.get('clangTidy', '21.1.6')}']",
+        f"        additional_dependencies: ['clang-tidy=={tools['clangTidy']}']",
         "        types_or: [c++, c]",
     ]
-    if checks.get("cppcheck", True):
+    if checks["cppcheck"]:
         lines += [
             "",
             "      - id: cppcheck",
@@ -318,30 +313,30 @@ def precommit_body(settings: Settings) -> str:
 
 def matrix_cells(settings: Settings) -> list[dict]:
     """Normalise and floor-check the CI matrix."""
-    floor = settings.repo.get("compilerFloor", {})
+    floor = settings.repo["compilerFloor"]
     cells = []
-    for cell in settings.repo.get("ci", {}).get("matrix", []):
+    for cell in settings.repo["ci"]["matrix"]:
         compiler = cell["compiler"]
         version = str(cell.get("version", ""))
         if compiler in ("gcc", "clang"):
-            if version_tuple(version) < version_tuple(floor.get(compiler, "0")):
+            if version_tuple(version) < version_tuple(floor[compiler]):
                 raise SetupError(
                     f"CI matrix: {compiler} {version} is below the floor "
-                    f"({compiler} {floor.get(compiler)}, cpp.repo.compilerFloor)"
+                    f"({compiler} {floor[compiler]}, cpp.repo.compilerFloor)"
                 )
             cc, cxx = (f"gcc-{version}", f"g++-{version}") if compiler == "gcc" else (
                 f"clang-{version}", f"clang++-{version}")
             # Clang on Linux uses the system libstdc++; take the one from the GCC floor, since the
             # runner's default may predate it (no <print> before libstdc++ 14).
             packages = f"g++-{version}" if compiler == "gcc" else (
-                f"clang-{version} libstdc++-{floor.get('gcc', '14')}-dev")
+                f"clang-{version} libstdc++-{floor['gcc']}-dev")
             install = cell.get("install") or (
                 f"sudo apt-get update && sudo apt-get install -y {packages}")
-            cells.append({"name": f"{compiler}-{version}", "os": cell["os"], "cc": cc, "cxx": cxx,
-                          "install": install, "linux": True})
+            cells.append({"name": f"{compiler}-{version}", "compiler": compiler, "os": cell["os"],
+                          "cc": cc, "cxx": cxx, "install": install})
         else:
-            cells.append({"name": "msvc", "os": cell["os"], "cc": "cl", "cxx": "cl",
-                          "install": "", "linux": False})
+            cells.append({"name": "msvc", "compiler": compiler, "os": cell["os"], "cc": "cl",
+                          "cxx": "cl", "install": "echo using the runner MSVC"})
     if not cells:
         raise SetupError("cpp.repo.ci.matrix is empty")
     return cells
@@ -349,40 +344,50 @@ def matrix_cells(settings: Settings) -> list[dict]:
 
 def linux_cell(cells: list[dict]) -> dict:
     """The cell lint and sanitizers run on: the first Clang one, else the first GCC one."""
-    linux = [cell for cell in cells if cell["linux"]]
+    linux = [cell for cell in cells if cell["compiler"] != "msvc"]
     if not linux:
         raise SetupError("CI matrix needs at least one gcc or clang cell: lint and sanitizers run on it")
-    return next((cell for cell in linux if cell["name"].startswith("clang")), linux[0])
+    return next((cell for cell in linux if cell["compiler"] == "clang"), linux[0])
 
 
-def ci_job_names(settings: Settings) -> list[str]:
-    cells = matrix_cells(settings)
+def ci_job_names(settings: Settings, cells: list[dict] | None = None) -> list[str]:
+    cells = cells if cells is not None else matrix_cells(settings)
     names = ["lint"] + [f"test ({cell['name']})" for cell in cells]
     if settings.sanitizer_variants():
         names.append("sanitizers")
     return names
 
 
-def _setup_steps(cell: dict, precommit: bool, extra_apt: str = "") -> list[str]:
-    pip = "pip install ninja pre-commit" if precommit else "pip install ninja"
+CHECKOUT_AND_PYTHON = [
+    "      - uses: actions/checkout@v4",
+    "      - uses: actions/setup-python@v5",
+    "        with:",
+    "          python-version: '3.12'",
+]
+
+
+def precommit_job(job: str, comment: str, cell: dict, run: str, env: dict[str, str],
+                  extra_apt: str = "") -> list[str]:
+    """A Linux job that installs the toolchain and runs one pre-commit stage."""
     install = cell["install"] + (f" && sudo apt-get install -y {extra_apt}" if extra_apt else "")
-    lines = [
-        "      - uses: actions/checkout@v4",
-        "      - uses: actions/setup-python@v5",
-        "        with:",
-        "          python-version: '3.12'",
-        f"      - run: {pip}",
+    return [
+        f"  {job}:",
+        f"    # {comment}",
+        f"    name: {job}",
+        f"    runs-on: {cell['os']}",
+        "    env:",
+        *(f"      {key}: {value}" for key, value in {"CC": cell["cc"], "CXX": cell["cxx"], **env}.items()),
+        "    steps:",
+        *CHECKOUT_AND_PYTHON,
+        "      - run: pip install ninja pre-commit",
         "      - name: Install toolchain",
         f"        run: {install}",
+        "      - uses: actions/cache@v4",
+        "        with:",
+        "          path: ~/.cache/pre-commit",
+        "          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}",
+        f"      - run: {run}",
     ]
-    if precommit:
-        lines += [
-            "      - uses: actions/cache@v4",
-            "        with:",
-            "          path: ~/.cache/pre-commit",
-            "          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}",
-        ]
-    return lines
 
 
 def github_ci_body(settings: Settings) -> str:
@@ -404,19 +409,11 @@ def github_ci_body(settings: Settings) -> str:
         "  cancel-in-progress: true",
         "",
         "jobs:",
-        "  lint:",
-        "    # The commit-stage hooks: clang-format, clang-tidy, cppcheck, incremental build.",
-        "    name: lint",
-        f"    runs-on: {tool['os']}",
-        "    env:",
-        f"      CC: {tool['cc']}",
-        f"      CXX: {tool['cxx']}",
-        "    steps:",
-        *_setup_steps(tool, precommit=True,
-                      extra_apt="cppcheck" if settings.repo.get("checks", {}).get("cppcheck", True)
-                      else ""),
-        "      - run: cmake --preset debug",
-        "      - run: pre-commit run --all-files --show-diff-on-failure",
+        *precommit_job(
+            "lint",
+            "The commit-stage hooks. `build` is skipped: the test job builds the same preset.",
+            tool, "cmake --preset debug && pre-commit run --all-files --show-diff-on-failure",
+            {"SKIP": "build"}, extra_apt="cppcheck" if settings.repo["checks"]["cppcheck"] else ""),
         "",
         "  test:",
         "    # Build and run the tests on every compiler, each pinned at or above the floor.",
@@ -433,17 +430,14 @@ def github_ci_body(settings: Settings) -> str:
             f"            os: {cell['os']}",
             f"            cc: {cell['cc']}",
             f"            cxx: {cell['cxx']}",
-            f"            install: {json.dumps(cell['install'] or 'echo using the runner MSVC')}",
+            f"            install: {json.dumps(cell['install'])}",
         ]
     lines += [
         "    env:",
         "      CC: ${{ matrix.cc }}",
         "      CXX: ${{ matrix.cxx }}",
         "    steps:",
-        "      - uses: actions/checkout@v4",
-        "      - uses: actions/setup-python@v5",
-        "        with:",
-        "          python-version: '3.12'",
+        *CHECKOUT_AND_PYTHON,
         "      - run: pip install ninja",
         "      - name: Install compiler",
         "        if: runner.os == 'Linux'",
@@ -457,19 +451,8 @@ def github_ci_body(settings: Settings) -> str:
     ]
     variants = settings.sanitizer_variants()
     if variants:
-        lines += [
-            "",
-            "  sanitizers:",
-            f"    # The push-stage hook: every test under {', '.join(variants)}.",
-            "    name: sanitizers",
-            f"    runs-on: {tool['os']}",
-            "    env:",
-            f"      CC: {tool['cc']}",
-            f"      CXX: {tool['cxx']}",
-            "    steps:",
-            *_setup_steps(tool, precommit=True),
-            "      - run: pre-commit run --all-files --hook-stage pre-push",
-        ]
+        lines += ["", *precommit_job("sanitizers", f"The push-stage hook: every test under {', '.join(variants)}.",
+                               tool, "pre-commit run --all-files --hook-stage pre-push", {})]
     return "\n".join(lines) + "\n"
 
 
@@ -503,25 +486,36 @@ def full_text(settings: Settings, spec: dict) -> str:
     return header(settings, spec) + "\n" + spec["body"]
 
 
-def drift(settings: Settings, rel: str, spec: dict) -> list[str]:
-    """Empty when clean. Otherwise the kinds of drift, most actionable first."""
+# Drift kinds that mean the file holds someone's own edits: generate refuses them without --force.
+USER_OWNED = {"hand_edited", "not_generated"}
+
+
+def drift(settings: Settings, rel: str, spec: dict, text: str | None = None) -> dict[str, str]:
+    """{kind: message}, empty when clean, most actionable first. `text` saves re-reading the file."""
     path = settings.root / rel
-    if not path.exists():
-        return ["missing"]
-    head, body = split_header(path.read_text(encoding="utf-8"))
+    if text is None:
+        if not path.exists():
+            return {"missing": "missing"}
+        text = path.read_text(encoding="utf-8")
+    head, body = split_header(text)
     stamp = stamps(head)
     if "wf-generated-sha256" not in stamp:
-        return ["not generated (no provenance header)"]
-    kinds = []
+        return {"not_generated": "not generated (no provenance header)"}
+    kinds = {}
     if sha(body.encode()) != stamp["wf-generated-sha256"]:
-        kinds.append("hand-edited since generation")
-    if stamp.get("wf-template") != f"cpp-repo/{settings.template_version}":
-        kinds.append(f"template moved on ({stamp.get('wf-template')} -> cpp-repo/{settings.template_version})")
+        kinds["hand_edited"] = "hand-edited since generation"
+    current = f"cpp-repo/{settings.template_version}"
+    if stamp.get("wf-template") != current:
+        kinds["template"] = f"template moved on ({stamp.get('wf-template')} -> {current})"
     if stamp.get("wf-config-sha256") != settings.config_hash():
-        kinds.append("config changed, never regenerated")
+        kinds["config"] = "config changed, never regenerated"
     if not kinds and body != spec["body"]:
-        kinds.append("generator changed; regenerate")
+        kinds["generator"] = "generator changed; regenerate"
     return kinds
+
+
+def describe(kinds: dict[str, str]) -> str:
+    return "; ".join(kinds.values()) or "clean"
 
 
 # --------------------------------------------------------------------------- protection
@@ -692,10 +686,11 @@ def cmd_protect(args: argparse.Namespace) -> int:
     if code != 0:
         print(f"error: protection write failed: {err.strip()}", file=sys.stderr)
         return ERROR
-    after = github_branch_state(slug, state["branch"], settings, forge)
-    if after.get("diff"):
+    code, out, err = gh_api([f"repos/{slug}/branches/{state['branch']}/protection"])
+    after = policy_diff(github_current(json.loads(out)) if code == 0 else None, state["proposed"])
+    if after:
         print("error: protection written but read back differently:", file=sys.stderr)
-        for line in after["diff"]:
+        for line in after:
             print(f"   {line}", file=sys.stderr)
         return ERROR
     print(f"applied protection to {state['branch']}")
@@ -749,8 +744,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
             print(f"unchanged {rel}")
             continue
         changed = True
-        kinds = drift(settings, rel, spec)
-        owned = [kind for kind in kinds if kind.startswith(("hand-edited", "not generated"))]
+        kinds = drift(settings, rel, spec, old) if old else {}
+        owned = [message for kind, message in kinds.items() if kind in USER_OWNED]
         if owned and not args.force:
             print(f"refusing {rel}: {owned[0]}. Fold what it wants into .claude/workflows.json, "
                   "or pass --force to replace it.", file=sys.stderr)
@@ -775,7 +770,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     else:
         print(forge_note(forge))
         for rel, kinds in report.items():
-            print(f"{rel}: {'; '.join(kinds) if kinds else 'clean'}")
+            print(f"{rel}: {describe(kinds)}")
     return DRIFT if any(report.values()) else OK
 
 
@@ -801,7 +796,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     for rel, action in status["scaffold"].items():
         print(f"  scaffold  {action:<7} {rel}")
     for rel, kinds in generated.items():
-        print(f"  generated {rel}: {'; '.join(kinds) if kinds else 'clean'}")
+        print(f"  generated {rel}: {describe(kinds)}")
     print(f"sanitizer variants: {', '.join(status['sanitizers']) or 'none'}")
     if status["ciJobs"]:
         print(f"CI jobs: {', '.join(status['ciJobs'])}")
