@@ -100,6 +100,10 @@
       },
       "tools": { "clangFormat": "21.1.8", "clangTidy": "21.1.6", "googletest": "v1.18.0" },
       "ci": {
+        "aptPackages": [],
+        "pipPackages": [],
+        "env": {},
+        "testWrapper": "",
         "matrix": [
           { "os": "ubuntu-24.04", "compiler": "gcc", "version": "14" },
           { "os": "ubuntu-24.04", "compiler": "clang", "version": "18" },

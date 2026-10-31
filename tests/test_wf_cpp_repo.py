@@ -154,6 +154,31 @@ class GenerateTest(RepoCase):
         self.assertEqual(cr.ci_job_names(settings),
                          ["lint", "test (gcc-14)", "test (clang-18)", "test (msvc)", "sanitizers"])
 
+    def test_ci_extras(self):
+        self.config({"cpp": {"repo": {"ci": {
+            "aptPackages": ["libx11-dev", "xvfb"], "pipPackages": ["jinja2"],
+            "env": {"LIBGL_ALWAYS_SOFTWARE": 1}, "testWrapper": "xvfb-run -a"}}}})
+        body = cr.github_ci_body(self.settings())
+        self.assertIn("apt-get install -y cppcheck libx11-dev xvfb", body)       # lint
+        self.assertIn("run: sudo apt-get install -y libx11-dev xvfb", body)     # test, Linux only
+        self.assertEqual(body.count("pip install ninja pre-commit jinja2"), 2)  # lint, sanitizers
+        self.assertIn("pip install ninja jinja2", body)                         # test, all OSes
+        self.assertEqual(body.count('LIBGL_ALWAYS_SOFTWARE: "1"'), 3)
+        self.assertIn("run: xvfb-run -a ctest --preset debug", body)
+        self.assertIn("if: runner.os != 'Linux'\n        run: ctest --preset debug", body)
+        self.assertIn("run: xvfb-run -a pre-commit run --all-files --hook-stage pre-push", body)
+        self.assertNotIn("xvfb-run -a cmake", body)
+        try:
+            import yaml  # noqa: PLC0415  (optional; the repo is stdlib-only)
+        except ImportError:
+            return
+        self.assertIn("jobs", yaml.safe_load(body))
+
+    def test_ci_extras_empty_changes_nothing(self):
+        body = cr.github_ci_body(self.settings())
+        self.assertNotIn("Install packages", body)
+        self.assertEqual(body.count("run: ctest --preset debug"), 1)
+
     def test_ci_rejects_below_floor(self):
         self.config({"cpp": {"repo": {"ci": {"matrix": [
             {"os": "ubuntu-24.04", "compiler": "gcc", "version": "13"}]}}}})

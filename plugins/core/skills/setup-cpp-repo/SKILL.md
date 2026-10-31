@@ -37,7 +37,10 @@ python3 "$S" protect  [--project <path>] [--branch B ...] [--apply] [--json]
 2. Settle per-repo overrides **before** writing, in the repo's `.claude/workflows.json`: the
    compiler floor (`cpp.repo.compilerFloor`), the CI matrix (`cpp.repo.ci.matrix`, every gcc/clang
    cell at or above the floor), TSan (`cpp.repo.checks.sanitizers.tsan`, off by default), cppcheck
-   (on), the memory cap (off; Linux only). Defaults are in `defaults/workflows.defaults.json` under
+   (on), the memory cap (off; Linux only). CI extras, all empty by default:
+   `cpp.repo.ci.aptPackages` (installed in every Linux job), `cpp.repo.ci.pipPackages` (every job,
+   Windows too), `cpp.repo.ci.env` (env for every job) and `cpp.repo.ci.testWrapper` (prefixes the
+   Linux test and sanitizer runs, e.g. `xvfb-run -a` for tests that need a display). Defaults are in `defaults/workflows.defaults.json` under
    `cpp.repo` and `git`. Ask about the ones you cannot infer from the repo's docs.
 3. `scaffold`, show the plan, then `scaffold --apply`. An `append` or `merge` action prints its diff.
 4. `/core:sync-lint-rules` to write `.clang-format` and `.clang-tidy`.

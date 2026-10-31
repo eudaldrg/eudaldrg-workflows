@@ -82,6 +82,14 @@ off (it needs a Linux systemd user session; elsewhere it is a no-op).
   and produces the same `compile_commands.json`. `CXX=cl` is set explicitly, because CMake would
   otherwise find the runner's MinGW `g++` first.
 
+## CI extras
+
+Repos with system dependencies (GUI or GL libraries, a virtual display for tests) set them in
+config rather than editing the CI file, so `check` stays clean: `cpp.repo.ci.aptPackages`,
+`pipPackages`, `env` and `testWrapper`. The wrapper applies only where tests run on Linux (the test
+job's ctest step and the sanitizer job), not to configure or build. The local pre-push hook does not
+use it; a developer machine has a display.
+
 ## Compiler floor
 
 Enforced twice: `cmake/ProjectSettings.cmake` fails configuration below the floor (Visual Studio

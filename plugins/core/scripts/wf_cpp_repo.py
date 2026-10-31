@@ -366,20 +366,34 @@ CHECKOUT_AND_PYTHON = [
 ]
 
 
+def env_lines(env: dict[str, str]) -> list[str]:
+    return ["    env:", *(f"      {key}: {value}" for key, value in env.items())]
+
+
+def ci_extras(settings: Settings) -> tuple[list[str], str, dict[str, str], str]:
+    """cpp.repo.ci extras: (aptPackages, pip packages suffix, env with values quoted, testWrapper)."""
+    ci = settings.repo["ci"]
+    pip = "".join(f" {package}" for package in ci["pipPackages"])
+    env = {key: json.dumps(str(value)) for key, value in ci["env"].items()}
+    wrapper = ci["testWrapper"].strip()
+    return list(ci["aptPackages"]), pip, env, (wrapper + " ") if wrapper else ""
+
+
 def precommit_job(job: str, comment: str, cell: dict, run: str, env: dict[str, str],
-                  extra_apt: str = "") -> list[str]:
+                  settings: Settings, extra_apt: list[str] | None = None) -> list[str]:
     """A Linux job that installs the toolchain and runs one pre-commit stage."""
-    install = cell["install"] + (f" && sudo apt-get install -y {extra_apt}" if extra_apt else "")
+    apt, pip, ci_env, _ = ci_extras(settings)
+    packages = " ".join([*(extra_apt or []), *apt])
+    install = cell["install"] + (f" && sudo apt-get install -y {packages}" if packages else "")
     return [
         f"  {job}:",
         f"    # {comment}",
         f"    name: {job}",
         f"    runs-on: {cell['os']}",
-        "    env:",
-        *(f"      {key}: {value}" for key, value in {"CC": cell["cc"], "CXX": cell["cxx"], **env}.items()),
+        *env_lines({"CC": cell["cc"], "CXX": cell["cxx"], **env, **ci_env}),
         "    steps:",
         *CHECKOUT_AND_PYTHON,
-        "      - run: pip install ninja pre-commit",
+        f"      - run: pip install ninja pre-commit{pip}",
         "      - name: Install toolchain",
         f"        run: {install}",
         "      - uses: actions/cache@v4",
@@ -393,6 +407,7 @@ def precommit_job(job: str, comment: str, cell: dict, run: str, env: dict[str, s
 def github_ci_body(settings: Settings) -> str:
     cells = matrix_cells(settings)
     tool = linux_cell(cells)
+    apt, pip, ci_env, wrapper = ci_extras(settings)
     lines = [
         "name: ci",
         "",
@@ -413,7 +428,8 @@ def github_ci_body(settings: Settings) -> str:
             "lint",
             "The commit-stage hooks. `build` is skipped: the test job builds the same preset.",
             tool, "cmake --preset debug && pre-commit run --all-files --show-diff-on-failure",
-            {"SKIP": "build"}, extra_apt="cppcheck" if settings.repo["checks"]["cppcheck"] else ""),
+            {"SKIP": "build"}, settings,
+            extra_apt=["cppcheck"] if settings.repo["checks"]["cppcheck"] else []),
         "",
         "  test:",
         "    # Build and run the tests on every compiler, each pinned at or above the floor.",
@@ -433,26 +449,41 @@ def github_ci_body(settings: Settings) -> str:
             f"            install: {json.dumps(cell['install'])}",
         ]
     lines += [
-        "    env:",
-        "      CC: ${{ matrix.cc }}",
-        "      CXX: ${{ matrix.cxx }}",
+        *env_lines({"CC": "${{ matrix.cc }}", "CXX": "${{ matrix.cxx }}", **ci_env}),
         "    steps:",
         *CHECKOUT_AND_PYTHON,
-        "      - run: pip install ninja",
+        f"      - run: pip install ninja{pip}",
         "      - name: Install compiler",
         "        if: runner.os == 'Linux'",
         "        run: ${{ matrix.install }}",
+    ]
+    if apt:
+        lines += [
+            "      - name: Install packages",
+            "        if: runner.os == 'Linux'",
+            f"        run: sudo apt-get install -y {' '.join(apt)}",
+        ]
+    lines += [
         "      - name: MSVC developer environment",
         "        if: runner.os == 'Windows'",
         "        uses: ilammy/msvc-dev-cmd@v1",
         "      - run: cmake --preset debug",
         "      - run: cmake --build --preset debug",
-        "      - run: ctest --preset debug",
     ]
+    if wrapper:
+        lines += [
+            "      - if: runner.os == 'Linux'",
+            f"        run: {wrapper}ctest --preset debug",
+            "      - if: runner.os != 'Linux'",
+            "        run: ctest --preset debug",
+        ]
+    else:
+        lines.append("      - run: ctest --preset debug")
     variants = settings.sanitizer_variants()
     if variants:
         lines += ["", *precommit_job("sanitizers", f"The push-stage hook: every test under {', '.join(variants)}.",
-                               tool, "pre-commit run --all-files --hook-stage pre-push", {})]
+                               tool, f"{wrapper}pre-commit run --all-files --hook-stage pre-push", {},
+                               settings)]
     return "\n".join(lines) + "\n"
 
 
