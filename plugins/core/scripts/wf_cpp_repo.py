@@ -524,6 +524,184 @@ def drift(settings: Settings, rel: str, spec: dict) -> list[str]:
     return kinds
 
 
+# --------------------------------------------------------------------------- protection
+# The policy (git.protection) is forge-neutral; an adapter turns it into one forge's API calls.
+# Only GitHub has one. Every write goes through `protect --apply --branch B`, one branch at a time,
+# so the skill can show the diff and ask before each.
+
+POLICY_DEFAULTS = {"requirePR": True, "approvals": 0, "allowForcePush": False,
+                   "allowDeletion": False, "linearHistory": False, "enforceAdmins": True}
+
+
+def gh_api(args: list[str], payload: dict | None = None) -> tuple[int, str, str]:
+    """Run `gh api`. Tests replace this function."""
+    cmd = ["gh", "api", *args]
+    try:
+        out = subprocess.run(cmd, input=json.dumps(payload) if payload is not None else None,
+                             capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return 127, "", str(exc)
+    return out.returncode, out.stdout, out.stderr
+
+
+def policy_for(settings: Settings, branch: str, forge: dict) -> dict:
+    protection = settings.git.get("protection", {}) or {}
+    policy = {**POLICY_DEFAULTS, **(protection.get("branches", {}).get(branch) or {})}
+    required = protection.get("requiredChecks", "auto")
+    if required == "auto":
+        required = ci_job_names(settings) if forge["forge"] == "github" else []
+    policy["requiredChecks"] = sorted(required)
+    return policy
+
+
+def protected_branches(settings: Settings) -> list[str]:
+    configured = list((settings.git.get("protection", {}) or {}).get("branches", {}) or {})
+    return configured or [settings.release, settings.integration]
+
+
+def github_payload(policy: dict) -> dict:
+    """PUT /repos/{o}/{r}/branches/{b}/protection. All four top-level keys are mandatory."""
+    return {
+        "required_status_checks": (
+            {"strict": False, "contexts": policy["requiredChecks"]} if policy["requiredChecks"] else None
+        ),
+        "enforce_admins": bool(policy["enforceAdmins"]),
+        "required_pull_request_reviews": (
+            {"required_approving_review_count": int(policy["approvals"]),
+             "dismiss_stale_reviews": False, "require_code_owner_reviews": False}
+            if policy["requirePR"] else None
+        ),
+        "restrictions": None,
+        "allow_force_pushes": bool(policy["allowForcePush"]),
+        "allow_deletions": bool(policy["allowDeletion"]),
+        "required_linear_history": bool(policy["linearHistory"]),
+    }
+
+
+def github_current(response: dict | None) -> dict | None:
+    """GET .../protection response -> the policy shape, or None when the branch is unprotected."""
+    if response is None:
+        return None
+    checks = response.get("required_status_checks") or {}
+    reviews = response.get("required_pull_request_reviews")
+
+    def enabled(key: str) -> bool:
+        return bool((response.get(key) or {}).get("enabled"))
+
+    return {
+        "requirePR": reviews is not None,
+        "approvals": int((reviews or {}).get("required_approving_review_count", 0)),
+        "allowForcePush": enabled("allow_force_pushes"),
+        "allowDeletion": enabled("allow_deletions"),
+        "linearHistory": enabled("required_linear_history"),
+        "enforceAdmins": enabled("enforce_admins"),
+        "requiredChecks": sorted(checks.get("contexts") or []),
+    }
+
+
+def policy_diff(current: dict | None, proposed: dict) -> list[str]:
+    if current is None:
+        return [f"{key}: (unprotected) -> {json.dumps(value)}" for key, value in proposed.items()]
+    return [f"{key}: {json.dumps(current.get(key))} -> {json.dumps(value)}"
+            for key, value in proposed.items() if current.get(key) != value]
+
+
+def checklist(settings: Settings, forge: dict) -> str:
+    lines = [f"No forge adapter here ({forge['reason']}). Set these by hand in the forge's settings:"]
+    for branch in protected_branches(settings):
+        policy = policy_for(settings, branch, forge)
+        lines.append(f"- {branch}:")
+        lines.append(f"    merge only through a pull/merge request: {policy['requirePR']}")
+        lines.append(f"    required approvals: {policy['approvals']}")
+        lines.append(f"    required CI checks: {', '.join(policy['requiredChecks']) or 'the CI jobs, once CI exists'}")
+        lines.append(f"    force push allowed: {policy['allowForcePush']}")
+        lines.append(f"    deletion allowed: {policy['allowDeletion']}")
+        lines.append(f"    linear history required: {policy['linearHistory']}")
+        lines.append(f"    rules apply to admins too: {policy['enforceAdmins']}")
+    return "\n".join(lines)
+
+
+def github_branch_state(slug: str, branch: str, settings: Settings, forge: dict) -> dict:
+    state: dict = {"branch": branch, "proposed": policy_for(settings, branch, forge)}
+    code, _, err = gh_api([f"repos/{slug}/branches/{branch}"])
+    if code != 0:
+        state["error"] = (f"branch {branch} not found on {slug}; push it first"
+                          if "404" in err or "Not Found" in err else err.strip())
+        return state
+    code, out, err = gh_api([f"repos/{slug}/branches/{branch}/protection"])
+    if code == 0:
+        state["current"] = github_current(json.loads(out))
+    elif "404" in err or "not protected" in err.lower():
+        state["current"] = None
+    else:
+        state["error"] = err.strip()
+        return state
+    state["diff"] = policy_diff(state["current"], state["proposed"])
+    # A required check that never reported on this branch blocks every PR into it.
+    code, out, _ = gh_api([f"repos/{slug}/commits/{branch}/check-runs", "--jq", "[.check_runs[].name]"])
+    ran = set(json.loads(out)) if code == 0 and out.strip() else set()
+    state["neverRan"] = [name for name in state["proposed"]["requiredChecks"] if name not in ran]
+    return state
+
+
+def cmd_protect(args: argparse.Namespace) -> int:
+    settings = load(args.project)
+    forge = detect_forge(settings)
+    if forge["forge"] != "github":
+        print(checklist(settings, forge))
+        return OK
+    slug = forge["slug"]
+    code, _, err = gh_api(["user", "--jq", ".login"])
+    if code != 0:
+        print(f"gh is not usable ({err.strip() or 'not installed'}); run `gh auth login`, or set "
+              "protection by hand:", file=sys.stderr)
+        print(checklist(settings, {**forge, "reason": "gh unavailable"}))
+        return ERROR
+
+    branches = args.branch or protected_branches(settings)
+    if args.apply and len(branches) != 1:
+        print("error: --apply writes one branch at a time; pass exactly one --branch", file=sys.stderr)
+        return ERROR
+
+    states = [github_branch_state(slug, branch, settings, forge) for branch in branches]
+    if args.json and not args.apply:
+        print(json.dumps({"forge": forge, "branches": states}, indent=2))
+        return OK
+    for state in states:
+        print(f"== {slug} {state['branch']}")
+        if "error" in state:
+            print(f"   error: {state['error']}")
+            continue
+        for line in state["diff"] or ["(already matches the policy)"]:
+            print(f"   {line}")
+        if state["neverRan"]:
+            print(f"   warning: required checks never reported on {state['branch']}: "
+                  f"{', '.join(state['neverRan'])}. Every PR into it would wait on them; run CI "
+                  "on it first.")
+    if not args.apply:
+        return OK
+
+    state = states[0]
+    if "error" in state:
+        return ERROR
+    if not state["diff"]:
+        return OK
+    payload = github_payload(state["proposed"])
+    code, _, err = gh_api(["-X", "PUT", f"repos/{slug}/branches/{state['branch']}/protection",
+                           "--input", "-"], payload)
+    if code != 0:
+        print(f"error: protection write failed: {err.strip()}", file=sys.stderr)
+        return ERROR
+    after = github_branch_state(slug, state["branch"], settings, forge)
+    if after.get("diff"):
+        print("error: protection written but read back differently:", file=sys.stderr)
+        for line in after["diff"]:
+            print(f"   {line}", file=sys.stderr)
+        return ERROR
+    print(f"applied protection to {state['branch']}")
+    return OK
+
+
 # --------------------------------------------------------------------------- commands
 
 
@@ -652,6 +830,12 @@ def build_parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", help="report drift in the generated files; exit 1 on drift")
     check.add_argument("--json", action="store_true")
     check.set_defaults(func=cmd_check)
+
+    protect = sub.add_parser("protect", help="show (default) or apply branch protection on the forge")
+    protect.add_argument("--branch", action="append", help="branch to show or apply; repeatable")
+    protect.add_argument("--apply", action="store_true", help="write one --branch's protection")
+    protect.add_argument("--json", action="store_true")
+    protect.set_defaults(func=cmd_protect)
     return parser
 
 

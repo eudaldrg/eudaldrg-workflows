@@ -142,8 +142,8 @@
     "protection": {
       "requiredChecks": "auto",
       "branches": {
-        "main": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false },
-        "dev": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false }
+        "main": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false, "enforceAdmins": true },
+        "dev": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false, "enforceAdmins": true }
       }
     }
   },
