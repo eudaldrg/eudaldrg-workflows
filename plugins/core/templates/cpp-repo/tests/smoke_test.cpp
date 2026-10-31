@@ -4,6 +4,8 @@
 
 namespace {
 
-TEST(SmokeTest, TestFrameworkRuns) { EXPECT_EQ(1 + 1, 2); }
+TEST(SmokeTest, TestFrameworkRuns) {
+    EXPECT_EQ(1 + 1, 2);
+}
 
 }  // namespace

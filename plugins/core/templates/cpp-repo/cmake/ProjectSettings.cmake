@@ -11,6 +11,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 # clang-tidy and cppcheck read build/debug/compile_commands.json.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# No C++20 modules. Scanning for them also puts GCC-only flags (-fdeps-format, -fmodules-ts) into
+# compile_commands.json, which clang-tidy rejects. Turn it on if the project adopts modules.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
