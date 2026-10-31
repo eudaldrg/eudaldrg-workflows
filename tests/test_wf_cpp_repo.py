@@ -190,6 +190,16 @@ class GenerateTest(RepoCase):
         self.assertEqual(code, cr.DRIFT)
         self.assertIn("config changed, never regenerated", out)
 
+    def test_hand_written_file_needs_force(self):
+        path = self.root / cr.PRECOMMIT
+        path.write_text("repos: []\n", encoding="utf-8")
+        code, _, err = self.run_cli("generate", "--apply")
+        self.assertEqual(code, cr.DRIFT)
+        self.assertIn("not generated", err)
+        self.assertEqual(path.read_text(encoding="utf-8"), "repos: []\n")
+        self.assertEqual(self.run_cli("generate", "--apply", "--force")[0], cr.OK)
+        self.assertEqual(self.run_cli("check")[0], cr.OK)
+
     def test_template_version_drift(self):
         self.run_cli("generate", "--apply")
         path = self.root / cr.PRECOMMIT

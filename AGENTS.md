@@ -121,6 +121,11 @@ Install through the marketplace:
 
 Skills are namespaced by plugin name, so they appear as `/core:<skill-name>`.
 
+C++ repos: `/core:setup-cpp-repo` scaffolds a CMake skeleton (GCC/Clang/MSVC warnings, sanitizers,
+GoogleTest), Python check scripts and docs/tasks pages once, and keeps `.pre-commit-config.yaml` and
+the CI file generated from `cpp.repo` / `git.protection` with a drift check. Forge-specific parts go
+through adapters, GitHub only for now. `references/cpp-repo-setup.md` has the decisions.
+
 Lean startup context (`references/lean-context.md` has the reasoning and the measurements):
 
 - `/core:setup-lean-context` writes three keys into `~/.claude/settings.json` — deny `Artifact`,

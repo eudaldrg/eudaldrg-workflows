@@ -750,9 +750,10 @@ def cmd_generate(args: argparse.Namespace) -> int:
             continue
         changed = True
         kinds = drift(settings, rel, spec)
-        if "hand-edited since generation" in kinds and not args.force:
-            print(f"refusing {rel}: hand-edited since generation. Fold the edit into "
-                  ".claude/workflows.json, or pass --force to discard it.", file=sys.stderr)
+        owned = [kind for kind in kinds if kind.startswith(("hand-edited", "not generated"))]
+        if owned and not args.force:
+            print(f"refusing {rel}: {owned[0]}. Fold what it wants into .claude/workflows.json, "
+                  "or pass --force to replace it.", file=sys.stderr)
             print(unified(rel, old, new), end="")
             return DRIFT
         print(unified(rel, old, new), end="")
