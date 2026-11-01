@@ -98,7 +98,7 @@
         "sanitizers": { "asanUbsan": true, "tsan": false },
         "memoryCap": false
       },
-      "tools": { "clangFormat": "21.1.8", "clangTidy": "21.1.6", "googletest": "v1.18.0" },
+      "tools": { "clangFormat": "21.1.8", "clangTidy": "21.1.6", "cppcheck": "2.19.0", "googletest": "v1.18.0" },
       "ci": {
         "aptPackages": [],
         "pipPackages": [],

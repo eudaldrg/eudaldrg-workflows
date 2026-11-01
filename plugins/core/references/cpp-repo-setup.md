@@ -104,15 +104,19 @@ What `scaffold` writes, and what the skill's CI rules ask a hand-edited file to 
 (e.g. GUI/GL dev packages, `xvfb-run -a` for tests that need a display). After that, edit the file.
 The local pre-push hook does not use the wrapper; a developer machine has a display.
 
-## cppcheck is not pinned
+## cppcheck is pinned by building it
 
 clang-format and clang-tidy come from PyPI wheels, so every machine runs the same version. cppcheck
-has no such wheel (the PyPI package named `cppcheck` is an unrelated project), so the hook runs
-whatever the system has: Ubuntu 24.04's 2.13 in CI, often a newer one locally. The two can
-disagree, typically a false positive the newer version fixed. Suppress such a finding inline with
-`// cppcheck-suppress <id>` and a reason naming the version, and drop the suppression when CI's
-cppcheck catches up. Pinning would need conda (`language: conda`) or a source build in CI; neither
-is worth it yet.
+has no such wheel (the PyPI package named `cppcheck` is an unrelated project), and distribution
+versions differ (Ubuntu 24.04 ships 2.13, 26.04 ships 2.19) and disagree on findings. Suppressing
+CI-only false positives was rejected: it hides real differences and leaves suppressions to clean up.
+
+So the pin is `cpp.repo.tools.cppcheck`. The reference CI builds that tag from source in the lint
+job (cmake + Ninja, `-DUSE_MATCHCOMPILER=ON`, `FILESDIR` under the install prefix so it finds its
+`.cfg` libraries) and caches the install keyed on the version, so the build runs once per version.
+Locally the hook still runs the system cppcheck; a generated `cppcheck-version` hook prints a
+warning (it never fails) when that differs from the pin. Bump the pin together with the local
+version.
 
 ## Compiler floor
 

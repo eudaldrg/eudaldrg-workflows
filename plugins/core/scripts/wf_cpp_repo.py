@@ -277,6 +277,7 @@ def precommit_body(settings: Settings) -> str:
         "        types_or: [c++, c]",
     ]
     if checks["cppcheck"]:
+        pin = tools["cppcheck"]
         lines += [
             "",
             "      - id: cppcheck",
@@ -289,6 +290,20 @@ def precommit_body(settings: Settings) -> str:
             "          --suppress=missingInclude --suppress=missingIncludeSystem",
             "        language: system",
             "        types_or: [c++, c]",
+            "",
+            "      - id: cppcheck-version",
+            f"        name: cppcheck is the pinned {pin} (warns only)",
+            "        # CI builds exactly this version; a different local one can disagree on findings.",
+            "        entry: >-",
+            "          python -c 'import subprocess;"
+            ' out = subprocess.run(["cppcheck", "--version"], capture_output=True, text=True).stdout.split();'
+            ' found = out[-1] if out else "none";'
+            f' found == "{pin}" or print("warning: cppcheck " + found + " here, but CI pins {pin}:'
+            f' findings can differ. Install {pin}, or bump cpp.repo.tools.cppcheck.")\'',
+            "        language: python",
+            "        pass_filenames: false",
+            "        always_run: true",
+            "        verbose: true",
         ]
     lines += [
         "",
@@ -372,6 +387,28 @@ PRECOMMIT_CACHE = [
 ]
 
 
+# The distribution's cppcheck differs by release (Ubuntu 24.04 has 2.13), and versions disagree on
+# findings, so lint builds the pinned version (cpp.repo.tools.cppcheck) once and caches it.
+CPPCHECK_STEPS = [
+    "      - uses: actions/cache@v4",
+    "        id: cppcheck",
+    "        with:",
+    "          path: ~/cppcheck",
+    "          key: cppcheck-${{ env.CPPCHECK_VERSION }}-${{ runner.os }}",
+    "      - name: Build cppcheck ${{ env.CPPCHECK_VERSION }}",
+    "        if: steps.cppcheck.outputs.cache-hit != 'true'",
+    "        run: |",
+    '          curl -sSL "https://github.com/danmar/cppcheck/archive/refs/tags/${CPPCHECK_VERSION}.tar.gz"'
+    ' | tar xz -C "$RUNNER_TEMP"',
+    '          cmake -S "$RUNNER_TEMP/cppcheck-${CPPCHECK_VERSION}" -B "$RUNNER_TEMP/cppcheck-build" -G Ninja \\',
+    '            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/cppcheck" \\',
+    '            -DFILESDIR="$HOME/cppcheck/share/cppcheck" -DUSE_MATCHCOMPILER=ON',
+    '          cmake --build "$RUNNER_TEMP/cppcheck-build"',
+    '          cmake --install "$RUNNER_TEMP/cppcheck-build"',
+    '      - run: echo "$HOME/cppcheck/bin" >> "$GITHUB_PATH"',
+]
+
+
 def env_lines(env: dict[str, str], indent: str = "    ") -> list[str]:
     return [f"{indent}env:", *(f"{indent}  {key}: {value}" for key, value in env.items())]
 
@@ -405,7 +442,7 @@ def github_ci_body(settings: Settings) -> str:
     cells = matrix_cells(settings)
     tool = linux_cell(cells)
     apt, pip, env, wrapper = ci_extras(settings)
-    cppcheck = " cppcheck" if settings.repo["checks"]["cppcheck"] else ""
+    cppcheck = settings.repo["checks"]["cppcheck"]
     lines = [
         "# CI: the commit-stage hooks (lint), the push-stage hook (sanitizers), and a build and test on",
         "# every compiler in the matrix, each pinned at or above the floor in cmake/ProjectSettings.cmake.",
@@ -430,6 +467,8 @@ def github_ci_body(settings: Settings) -> str:
         "  cancel-in-progress: true",
         "",
     ]
+    if cppcheck:
+        env = {**env, "CPPCHECK_VERSION": settings.repo["tools"]["cppcheck"]}
     if env:
         lines += [*env_lines(env, indent=""), ""]
     lines += [
@@ -445,7 +484,8 @@ def github_ci_body(settings: Settings) -> str:
         "          fetch-depth: 0  # the PR's base, to diff against",
         *CHECKOUT_AND_PYTHON[1:],
         f"      - run: pip install ninja pre-commit{pip}",
-        *apt_step(f"{tool['packages']}{cppcheck}{apt}", "lint-1"),
+        *apt_step(f"{tool['packages']}{apt}", "lint-1"),
+        *(CPPCHECK_STEPS if cppcheck else []),
         *PRECOMMIT_CACHE,
         "      - run: cmake --preset debug",
         "      - name: Hooks on the changed files",
@@ -537,6 +577,9 @@ def ci_warnings(settings: Settings, text: str) -> list[str]:
         compiler = "gcc" if name in ("gcc", "g++") else "clang"
         if version_tuple(version) < version_tuple(floor[compiler]):
             warnings.append(f"uses {name}-{version}, below the {compiler} floor {floor[compiler]}")
+    pin = settings.repo["tools"]["cppcheck"]
+    if settings.repo["checks"]["cppcheck"] and pin not in text:
+        warnings.append(f"does not build the pinned cppcheck {pin} (cpp.repo.tools.cppcheck)")
     if any(cell["compiler"] == "msvc" for cell in settings.repo["ci"]["matrix"]) and "windows" not in text:
         warnings.append("has no Windows job, but cpp.repo.ci.matrix lists msvc")
     return warnings

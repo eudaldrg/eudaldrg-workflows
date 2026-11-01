@@ -77,11 +77,16 @@ When creating or editing a C++ repo's CI, keep these, and say so if a change dro
 - **Cache** apt packages (`awalsh128/cache-apt-pkgs-action`; bump its `version` to refresh) and
   objects (`hendrikmuhs/ccache-action` + `CMAKE_<LANG>_COMPILER_LAUNCHER=ccache`), plus
   `~/.cache/pre-commit` keyed on the config.
+- **cppcheck at the pinned version** (`cpp.repo.tools.cppcheck`): the lint job builds that tag from
+  source once and caches `~/cppcheck` keyed on the version, rather than taking the distribution's
+  cppcheck, whose findings differ by release. Bump the pin together with the local cppcheck; the
+  `cppcheck-version` hook warns locally when they differ.
 - Skipping a test on one platform is fine with a ctest label (`ctest -LE <label>`) and a comment
   saying why. Skipping a whole stage is not.
 
 `check` reads the file and warns, without failing, when it never runs a hook stage, uses a compiler
-below the floor, or has no Windows job while the matrix lists MSVC. Report those warnings.
+below the floor, does not build the pinned cppcheck, or has no Windows job while the matrix lists
+MSVC. Report those warnings.
 
 Job names matter for protection: `requiredChecks: "auto"` uses the names of the CI checks that
 reported on the branch, so renaming a job means re-running `protect` after CI has run.

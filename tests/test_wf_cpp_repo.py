@@ -135,6 +135,18 @@ class GenerateTest(RepoCase):
         self.assertNotIn("tsan", body)
         self.assertFalse(body.startswith("#"))
 
+    def test_cppcheck_version_hook(self):
+        body = cr.precommit_body(self.settings())
+        self.assertIn("id: cppcheck-version", body)
+        self.assertIn('found == "2.19.0" or print(', body)
+        self.config({"cpp": {"repo": {"checks": {"cppcheck": False}}}})
+        self.assertNotIn("cppcheck-version", cr.precommit_body(self.settings()))
+
+    def test_ci_warns_without_cppcheck_pin(self):
+        body = cr.github_ci_body(self.settings()).replace("2.19.0", "2.13.0")
+        self.assertIn("does not build the pinned cppcheck 2.19.0",
+                      " ".join(cr.ci_warnings(self.settings(), body)))
+
     def test_precommit_toggles(self):
         self.config({"cpp": {"repo": {"checks": {"cppcheck": False,
                                                  "sanitizers": {"tsan": True}}}}})
@@ -212,7 +224,10 @@ class CiScaffoldTest(RepoCase):
         self.assertIn("--from-ref origin/${{ github.base_ref }} --to-ref HEAD", body)
         self.assertIn("pre-commit run --all-files --show-diff-on-failure", body)
         self.assertIn("pre-commit run --all-files --hook-stage pre-push", body)
-        self.assertIn("packages: clang-19 libstdc++-14-dev cppcheck", body)
+        self.assertIn("packages: clang-19 libstdc++-14-dev\n", body)  # cppcheck is built, not apt
+        self.assertIn("CPPCHECK_VERSION: 2.19.0", body)
+        self.assertIn("-DUSE_MATCHCOMPILER=ON", body)
+        self.assertIn('echo "$HOME/cppcheck/bin" >> "$GITHUB_PATH"', body)
         self.assertIn(cr.CCACHE, body)
         self.assertIn("ilammy/msvc-dev-cmd@v1", body)
         self.assertEqual(cr.ci_warnings(self.settings(), body), [])
