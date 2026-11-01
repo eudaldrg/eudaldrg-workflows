@@ -144,55 +144,9 @@ class GenerateTest(RepoCase):
         self.config({"cpp": {"repo": {"checks": {"sanitizers": {"asanUbsan": False}}}}})
         self.assertNotIn("sanitizers", cr.precommit_body(self.settings()).split("repos:")[1])
 
-    def test_ci_matrix_and_jobs(self):
-        settings = self.settings()
-        body = cr.github_ci_body(settings)
-        self.assertIn("branches: [main, dev]", body)
-        self.assertIn("libstdc++-14-dev", body)
-        self.assertIn("ilammy/msvc-dev-cmd@v1", body)
-        self.assertIn("apt-get install -y cppcheck", body)
-        self.assertEqual(cr.ci_job_names(settings),
-                         ["lint", "test (gcc-14)", "test (clang-19)", "test (msvc)", "sanitizers"])
-
-    def test_ci_extras(self):
-        self.config({"cpp": {"repo": {"ci": {
-            "aptPackages": ["libx11-dev", "xvfb"], "pipPackages": ["jinja2"],
-            "env": {"LIBGL_ALWAYS_SOFTWARE": 1}, "testWrapper": "xvfb-run -a"}}}})
-        body = cr.github_ci_body(self.settings())
-        self.assertIn("apt-get install -y cppcheck libx11-dev xvfb", body)       # lint
-        self.assertIn("run: sudo apt-get install -y libx11-dev xvfb", body)     # test, Linux only
-        self.assertEqual(body.count("pip install ninja pre-commit jinja2"), 2)  # lint, sanitizers
-        self.assertIn("pip install ninja jinja2", body)                         # test, all OSes
-        self.assertEqual(body.count('LIBGL_ALWAYS_SOFTWARE: "1"'), 3)
-        self.assertIn("run: xvfb-run -a ctest --preset debug", body)
-        self.assertIn("if: runner.os != 'Linux'\n        run: ctest --preset debug", body)
-        self.assertIn("run: xvfb-run -a pre-commit run --all-files --hook-stage pre-push", body)
-        self.assertNotIn("xvfb-run -a cmake", body)
-        try:
-            import yaml  # noqa: PLC0415  (optional; the repo is stdlib-only)
-        except ImportError:
-            return
-        self.assertIn("jobs", yaml.safe_load(body))
-
-    def test_ci_extras_empty_changes_nothing(self):
-        body = cr.github_ci_body(self.settings())
-        self.assertNotIn("Install packages", body)
-        self.assertEqual(body.count("run: ctest --preset debug"), 1)
-
-    def test_ci_rejects_below_floor(self):
-        self.config({"cpp": {"repo": {"ci": {"matrix": [
-            {"os": "ubuntu-24.04", "compiler": "gcc", "version": "13"}]}}}})
-        code, _, err = self.run_cli("generate")
-        self.assertEqual(code, cr.ERROR)
-        self.assertIn("below the floor", err)
-
-    def test_ci_needs_a_linux_cell(self):
-        self.config({"cpp": {"repo": {"ci": {"matrix": [{"os": "windows-2022", "compiler": "msvc"}]}}}})
-        self.assertEqual(self.run_cli("generate")[0], cr.ERROR)
-
     def test_generate_is_idempotent_and_check_clean(self):
         self.assertEqual(self.run_cli("generate", "--apply")[0], cr.OK)
-        self.assertTrue((self.root / ".github/workflows/ci.yml").exists())
+        self.assertFalse((self.root / cr.CI_FILE).exists())  # CI is scaffolded, not generated
         code, out, _ = self.run_cli("generate", "--apply")
         self.assertIn("unchanged .pre-commit-config.yaml", out)
         self.assertEqual(self.run_cli("check")[0], cr.OK)
@@ -236,13 +190,83 @@ class GenerateTest(RepoCase):
         self.assertIn("template moved on", out)
 
 
+class CiScaffoldTest(RepoCase):
+    def test_scaffolded_once_without_header(self):
+        self.run_cli("scaffold", "--apply")
+        path = self.root / cr.CI_FILE
+        text = path.read_text(encoding="utf-8")
+        self.assertNotIn("wf-generated-sha256", text)
+        path.write_text(text + "# my own job\n", encoding="utf-8")
+        _, out, _ = self.run_cli("scaffold", "--apply")
+        self.assertIn(f"keep    {cr.CI_FILE}", out)
+        self.assertTrue(path.read_text(encoding="utf-8").endswith("# my own job\n"))
+        self.run_cli("generate", "--apply")
+        code, out, _ = self.run_cli("check")
+        self.assertEqual(code, cr.OK)
+        self.assertNotIn("warning", out)
+
+    def test_reference_workflow(self):
+        body = cr.github_ci_body(self.settings())
+        self.assertIn("branches: [main, dev]", body)
+        self.assertIn("fetch-depth: 0", body)
+        self.assertIn("--from-ref origin/${{ github.base_ref }} --to-ref HEAD", body)
+        self.assertIn("pre-commit run --all-files --show-diff-on-failure", body)
+        self.assertIn("pre-commit run --all-files --hook-stage pre-push", body)
+        self.assertIn("packages: clang-19 libstdc++-14-dev cppcheck", body)
+        self.assertIn(cr.CCACHE, body)
+        self.assertIn("ilammy/msvc-dev-cmd@v1", body)
+        self.assertEqual(cr.ci_warnings(self.settings(), body), [])
+
+    def test_extras_are_scaffold_inputs(self):
+        self.config({"cpp": {"repo": {"ci": {
+            "aptPackages": ["libx11-dev", "xvfb"], "pipPackages": ["jinja2"],
+            "env": {"LIBGL_ALWAYS_SOFTWARE": 1}, "testWrapper": "xvfb-run -a"}}}})
+        body = cr.github_ci_body(self.settings())
+        self.assertIn("APT_PACKAGES: libx11-dev xvfb", body)
+        self.assertIn('LIBGL_ALWAYS_SOFTWARE: "1"', body)
+        self.assertIn("packages: ${{ matrix.packages }} ${{ env.APT_PACKAGES }}", body)
+        self.assertEqual(body.count("pip install ninja pre-commit jinja2"), 2)
+        self.assertIn("pip install ninja jinja2", body)
+        self.assertIn("run: xvfb-run -a ctest --preset debug", body)
+        self.assertIn("run: xvfb-run -a pre-commit run --all-files --hook-stage pre-push", body)
+        try:
+            import yaml  # noqa: PLC0415  (optional; the repo is stdlib-only)
+        except ImportError:
+            return
+        self.assertIn("jobs", yaml.safe_load(body))
+
+    def test_rejects_below_floor_and_needs_linux(self):
+        self.config({"cpp": {"repo": {"ci": {"matrix": [
+            {"os": "ubuntu-24.04", "compiler": "gcc", "version": "13"}]}}}})
+        code, _, err = self.run_cli("scaffold")
+        self.assertEqual(code, cr.ERROR)
+        self.assertIn("below the floor", err)
+        self.config({"cpp": {"repo": {"ci": {"matrix": [{"os": "windows-2022", "compiler": "msvc"}]}}}})
+        self.assertEqual(self.run_cli("scaffold")[0], cr.ERROR)
+
+    def test_semantic_warnings(self):
+        settings = self.settings()
+        text = "jobs:\n  t:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: CXX=clang++-18 make\n"
+        warnings = cr.ci_warnings(settings, text)
+        self.assertTrue(any("commit-stage" in w for w in warnings))
+        self.assertTrue(any("push-stage" in w for w in warnings))
+        self.assertTrue(any("clang++-18, below the clang floor 19" in w for w in warnings))
+        self.assertTrue(any("no Windows job" in w for w in warnings))
+        (self.root / cr.CI_FILE).parent.mkdir(parents=True)
+        (self.root / cr.CI_FILE).write_text(text, encoding="utf-8")
+        self.run_cli("generate", "--apply")
+        code, out, _ = self.run_cli("check")
+        self.assertEqual(code, cr.OK)  # warnings, not drift
+        self.assertIn("warning: .github/workflows/ci.yml never runs the push-stage hooks", out)
+
+
 class NonGithubTest(RepoCase):
     origin = "git@gitlab.com:example/demo.git"
 
     def test_no_ci_file_for_unsupported_forge(self):
-        code, out, _ = self.run_cli("generate", "--apply")
+        code, out, _ = self.run_cli("scaffold", "--apply")
         self.assertEqual(code, cr.OK)
-        self.assertIn("forge: unsupported", out)
+        self.assertIn("forge: unsupported", self.run_cli("generate", "--apply")[1])
         self.assertTrue((self.root / cr.PRECOMMIT).exists())
         self.assertFalse((self.root / ".github").exists())
 

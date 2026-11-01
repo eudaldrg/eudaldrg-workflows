@@ -70,8 +70,7 @@ def to_response(payload):
 class PolicyTest(RepoCase):
     def test_payload_defaults(self):
         settings = self.settings()
-        forge = cr.detect_forge(settings)
-        payload = cr.github_payload(cr.policy_for(settings, "main", forge))
+        payload = cr.github_payload(cr.policy_for(settings, "main", JOBS))
         self.assertEqual(set(payload), {"required_status_checks", "enforce_admins",
                                         "required_pull_request_reviews", "restrictions",
                                         "allow_force_pushes", "allow_deletions",
@@ -89,19 +88,18 @@ class PolicyTest(RepoCase):
                                                          "staging": {}}}}})
         settings = self.settings()
         self.assertEqual(cr.protected_branches(settings), ["master", "develop", "staging"])
-        forge = cr.detect_forge(settings)
-        self.assertEqual(cr.policy_for(settings, "develop", forge)["approvals"], 1)
-        self.assertEqual(cr.policy_for(settings, "master", forge)["approvals"], 0)
+        self.assertEqual(cr.policy_for(settings, "develop", JOBS)["approvals"], 1)
+        self.assertEqual(cr.policy_for(settings, "master", JOBS)["approvals"], 0)
 
     def test_explicit_required_checks(self):
         self.config({"git": {"protection": {"requiredChecks": ["lint"]}}})
         settings = self.settings()
-        policy = cr.policy_for(settings, "dev", cr.detect_forge(settings))
+        policy = cr.policy_for(settings, "dev", JOBS)
         self.assertEqual(policy["requiredChecks"], ["lint"])
 
     def test_current_roundtrip(self):
         settings = self.settings()
-        policy = cr.policy_for(settings, "main", cr.detect_forge(settings))
+        policy = cr.policy_for(settings, "main", JOBS)
         current = cr.github_current(to_response(cr.github_payload(policy)))
         self.assertEqual(cr.policy_diff(current, policy), [])
 
@@ -141,17 +139,31 @@ class ProtectCliTest(RepoCase):
 
     def test_linear_history_bug_shows_in_diff(self):
         settings = self.settings()
-        policy = cr.policy_for(settings, "main", cr.detect_forge(settings))
+        policy = cr.policy_for(settings, "main", JOBS)
         wrong = cr.github_payload({**policy, "linearHistory": True})
         self.gh(FakeGh(protection={"main": to_response(wrong)}))
         _, out, _ = self.run_cli("protect", "--branch", "main")
         self.assertIn("linearHistory: true -> false", out)
 
     def test_missing_branch_and_unreported_checks(self):
+        self.config({"git": {"protection": {"requiredChecks": ["lint", "sanitizers"]}}})
         self.gh(FakeGh(branches=("main",), ran=["lint"]))
         _, out, _ = self.run_cli("protect")
         self.assertIn("branch dev not found", out)
-        self.assertIn("never reported on main", out)
+        self.assertIn("never reported on main: sanitizers", out)
+
+    def test_auto_checks_are_the_jobs_that_ran(self):
+        fake = self.gh(FakeGh(ran=["lint", "test (msvc)"]))
+        self.run_cli("protect", "--apply", "--branch", "main")
+        payload = fake.puts()[0][1]
+        self.assertEqual(payload["required_status_checks"]["contexts"], ["lint", "test (msvc)"])
+
+    def test_auto_checks_need_a_ci_run(self):
+        fake = self.gh(FakeGh(ran=[]))
+        code, out, _ = self.run_cli("protect", "--apply", "--branch", "main")
+        self.assertEqual(code, cr.ERROR)
+        self.assertIn("no CI checks have reported on main", out)
+        self.assertEqual(fake.puts(), [])
 
     def test_failed_write_is_an_error(self):
         self.gh(FakeGh(put_ok=False))

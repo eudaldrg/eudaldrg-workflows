@@ -122,9 +122,10 @@ Install through the marketplace:
 Skills are namespaced by plugin name, so they appear as `/core:<skill-name>`.
 
 C++ repos: `/core:setup-cpp-repo` scaffolds a CMake skeleton (GCC/Clang/MSVC warnings, sanitizers,
-GoogleTest), Python check scripts and docs/tasks pages once, and keeps `.pre-commit-config.yaml` and
-the CI file generated from `cpp.repo` and the `git` branch names, with a drift check. Forge-specific parts go
-through adapters, GitHub only for now. `references/cpp-repo-setup.md` has the decisions.
+GoogleTest), Python check scripts, docs/tasks pages and a reference CI workflow once, and keeps
+`.pre-commit-config.yaml` generated from `cpp.repo` with a drift check; `check` also warns about a
+repo's CI dropping a hook stage or the compiler floor. Forge-specific parts go through adapters,
+GitHub only for now. `references/cpp-repo-setup.md` has the decisions.
 
 Lean startup context (`references/lean-context.md` has the reasoning and the measurements):
 

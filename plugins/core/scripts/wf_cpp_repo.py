@@ -5,11 +5,13 @@ Two kinds of output, on purpose (references/cpp-repo-setup.md):
 
 - scaffolded once, owned by the repo afterwards: CMake skeleton, presets, smoke test, check
   scripts, docs/tasks pages, the AGENTS.md section. Never overwritten.
-- generated and kept in sync: .pre-commit-config.yaml and the forge's CI file. They carry a
-  provenance header (template version, config hash, body hash; no timestamp) for drift detection.
+- generated and kept in sync: .pre-commit-config.yaml. It carries a provenance header (template
+  version, config hash, body hash; no timestamp) for drift detection.
 
-Forge-specific parts (CI file, branch protection) go through an adapter picked from the origin
-URL or `git.forge`. Only GitHub has one; any other forge gets no CI file and a printed checklist.
+The CI file is forge-specific: scaffolded once (a reference workflow the repo then owns and edits)
+and checked semantically, never for byte drift. Branch protection goes through an adapter too. The
+forge comes from the origin URL or `git.forge`; only GitHub has an adapter, any other forge gets no
+CI file and a printed checklist.
 """
 
 from __future__ import annotations
@@ -221,6 +223,11 @@ def scaffold_actions(settings: Settings, name: str | None) -> list[dict]:
     else:
         actions.append({"path": "AGENTS.md", "action": "keep"})
 
+    if detect_forge(settings)["forge"] == "github":
+        exists = (settings.root / CI_FILE).exists()
+        actions.append({"path": CI_FILE, "action": "keep" if exists else "write",
+                        "content": None if exists else github_ci_body(settings)})
+
     gitignore = settings.root / ".gitignore"
     lines = gitignore.read_text(encoding="utf-8").splitlines() if gitignore.exists() else []
     if not any(line.strip().strip("/") == "build" for line in lines):
@@ -328,15 +335,13 @@ def matrix_cells(settings: Settings) -> list[dict]:
                 f"clang-{version}", f"clang++-{version}")
             # Clang on Linux uses the system libstdc++; take the one from the GCC floor, since the
             # runner's default may predate it (no <print> before libstdc++ 14).
-            packages = f"g++-{version}" if compiler == "gcc" else (
-                f"clang-{version} libstdc++-{floor['gcc']}-dev")
-            install = cell.get("install") or (
-                f"sudo apt-get update && sudo apt-get install -y {packages}")
+            packages = cell.get("packages") or (f"g++-{version}" if compiler == "gcc" else
+                                                f"clang-{version} libstdc++-{floor['gcc']}-dev")
             cells.append({"name": f"{compiler}-{version}", "compiler": compiler, "os": cell["os"],
-                          "cc": cc, "cxx": cxx, "install": install})
+                          "cc": cc, "cxx": cxx, "packages": packages})
         else:
             cells.append({"name": "msvc", "compiler": compiler, "os": cell["os"], "cc": "cl",
-                          "cxx": "cl", "install": "echo using the runner MSVC"})
+                          "cxx": "cl", "packages": ""})
     if not cells:
         raise SetupError("cpp.repo.ci.matrix is empty")
     return cells
@@ -350,65 +355,66 @@ def linux_cell(cells: list[dict]) -> dict:
     return next((cell for cell in linux if cell["compiler"] == "clang"), linux[0])
 
 
-def ci_job_names(settings: Settings, cells: list[dict] | None = None) -> list[str]:
-    cells = cells if cells is not None else matrix_cells(settings)
-    names = ["lint"] + [f"test ({cell['name']})" for cell in cells]
-    if settings.sanitizer_variants():
-        names.append("sanitizers")
-    return names
-
-
+CI_FILE = ".github/workflows/ci.yml"
+APT_CACHE = "awalsh128/cache-apt-pkgs-action@v1.6.3"
+CCACHE = "hendrikmuhs/ccache-action@v1.2.24"
 CHECKOUT_AND_PYTHON = [
     "      - uses: actions/checkout@v4",
     "      - uses: actions/setup-python@v5",
     "        with:",
     "          python-version: '3.12'",
 ]
+PRECOMMIT_CACHE = [
+    "      - uses: actions/cache@v4",
+    "        with:",
+    "          path: ~/.cache/pre-commit",
+    "          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}",
+]
 
 
-def env_lines(env: dict[str, str]) -> list[str]:
-    return ["    env:", *(f"      {key}: {value}" for key, value in env.items())]
+def env_lines(env: dict[str, str], indent: str = "    ") -> list[str]:
+    return [f"{indent}env:", *(f"{indent}  {key}: {value}" for key, value in env.items())]
 
 
-def ci_extras(settings: Settings) -> tuple[list[str], str, dict[str, str], str]:
-    """cpp.repo.ci extras: (aptPackages, pip packages suffix, env with values quoted, testWrapper)."""
+def ci_extras(settings: Settings) -> tuple[str, str, dict[str, str], str]:
+    """cpp.repo.ci scaffold inputs: (apt suffix, pip suffix, env with values quoted, testWrapper)."""
     ci = settings.repo["ci"]
+    apt = " ${{ env.APT_PACKAGES }}" if ci["aptPackages"] else ""
     pip = "".join(f" {package}" for package in ci["pipPackages"])
     env = {key: json.dumps(str(value)) for key, value in ci["env"].items()}
+    if ci["aptPackages"]:
+        env["APT_PACKAGES"] = " ".join(ci["aptPackages"])
     wrapper = ci["testWrapper"].strip()
-    return list(ci["aptPackages"]), pip, env, (wrapper + " ") if wrapper else ""
+    return apt, pip, env, (wrapper + " ") if wrapper else ""
 
 
-def precommit_job(job: str, comment: str, cell: dict, run: str, env: dict[str, str],
-                  settings: Settings, extra_apt: list[str] | None = None) -> list[str]:
-    """A Linux job that installs the toolchain and runs one pre-commit stage."""
-    apt, pip, ci_env, _ = ci_extras(settings)
-    packages = " ".join([*(extra_apt or []), *apt])
-    install = cell["install"] + (f" && sudo apt-get install -y {packages}" if packages else "")
-    return [
-        f"  {job}:",
-        f"    # {comment}",
-        f"    name: {job}",
-        f"    runs-on: {cell['os']}",
-        *env_lines({"CC": cell["cc"], "CXX": cell["cxx"], **env, **ci_env}),
-        "    steps:",
-        *CHECKOUT_AND_PYTHON,
-        f"      - run: pip install ninja pre-commit{pip}",
-        "      - name: Install toolchain",
-        f"        run: {install}",
-        "      - uses: actions/cache@v4",
-        "        with:",
-        "          path: ~/.cache/pre-commit",
-        "          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}",
-        f"      - run: {run}",
-    ]
+def apt_step(packages: str, version: str, indent_if: str = "") -> list[str]:
+    head = [f"      - if: {indent_if}", f"        uses: {APT_CACHE}"] if indent_if else [
+        f"      - uses: {APT_CACHE}"]
+    return [*head, "        with:", f"          packages: {packages}", f"          version: {version}"]
+
+
+def ccache_step(key: str, indent_if: str = "") -> list[str]:
+    head = [f"      - if: {indent_if}", f"        uses: {CCACHE}"] if indent_if else [
+        f"      - uses: {CCACHE}"]
+    return [*head, "        with:", f"          key: {key}"]
 
 
 def github_ci_body(settings: Settings) -> str:
+    """The reference workflow: what `scaffold` writes once. The repo owns and edits it after."""
     cells = matrix_cells(settings)
     tool = linux_cell(cells)
-    apt, pip, ci_env, wrapper = ci_extras(settings)
+    apt, pip, env, wrapper = ci_extras(settings)
+    cppcheck = " cppcheck" if settings.repo["checks"]["cppcheck"] else ""
     lines = [
+        "# CI: the commit-stage hooks (lint), the push-stage hook (sanitizers), and a build and test on",
+        "# every compiler in the matrix, each pinned at or above the floor in cmake/ProjectSettings.cmake.",
+        "# Scaffolded once by /core:setup-cpp-repo; this repo owns the file. Keep both hook stages and",
+        "# the floor; `wf_cpp_repo.py check` warns when they go missing.",
+        "#",
+        "# Speed: apt packages are cached by cache-apt-pkgs-action (bump `version` to refresh) and",
+        "# objects by ccache. On pull requests lint checks only the changed files; pushes to the",
+        "# protected branches check every file.",
         "name: ci",
         "",
         "on:",
@@ -423,16 +429,35 @@ def github_ci_body(settings: Settings) -> str:
         "  group: ci-${{ github.ref }}",
         "  cancel-in-progress: true",
         "",
+    ]
+    if env:
+        lines += [*env_lines(env, indent=""), ""]
+    lines += [
         "jobs:",
-        *precommit_job(
-            "lint",
-            "The commit-stage hooks. `build` is skipped: the test job builds the same preset.",
-            tool, "cmake --preset debug && pre-commit run --all-files --show-diff-on-failure",
-            {"SKIP": "build"}, settings,
-            extra_apt=["cppcheck"] if settings.repo["checks"]["cppcheck"] else []),
+        "  lint:",
+        "    # The commit-stage hooks. `build` is skipped: the test job builds the same preset.",
+        "    name: lint",
+        f"    runs-on: {tool['os']}",
+        *env_lines({"CC": tool["cc"], "CXX": tool["cxx"], "SKIP": "build"}),
+        "    steps:",
+        "      - uses: actions/checkout@v4",
+        "        with:",
+        "          fetch-depth: 0  # the PR's base, to diff against",
+        *CHECKOUT_AND_PYTHON[1:],
+        f"      - run: pip install ninja pre-commit{pip}",
+        *apt_step(f"{tool['packages']}{cppcheck}{apt}", "lint-1"),
+        *PRECOMMIT_CACHE,
+        "      - run: cmake --preset debug",
+        "      - name: Hooks on the changed files",
+        "        if: github.event_name == 'pull_request'",
+        "        run: >-",
+        "          pre-commit run --show-diff-on-failure",
+        "          --from-ref origin/${{ github.base_ref }} --to-ref HEAD",
+        "      - name: Hooks on every file",
+        "        if: github.event_name != 'pull_request'",
+        "        run: pre-commit run --all-files --show-diff-on-failure",
         "",
         "  test:",
-        "    # Build and run the tests on every compiler, each pinned at or above the floor.",
         "    name: test (${{ matrix.name }})",
         "    runs-on: ${{ matrix.os }}",
         "    strategy:",
@@ -446,28 +471,24 @@ def github_ci_body(settings: Settings) -> str:
             f"            os: {cell['os']}",
             f"            cc: {cell['cc']}",
             f"            cxx: {cell['cxx']}",
-            f"            install: {json.dumps(cell['install'])}",
         ]
+        if cell["packages"]:
+            lines.append(f"            packages: {cell['packages']}")
     lines += [
-        *env_lines({"CC": "${{ matrix.cc }}", "CXX": "${{ matrix.cxx }}", **ci_env}),
+        *env_lines({"CC": "${{ matrix.cc }}", "CXX": "${{ matrix.cxx }}"}),
         "    steps:",
         *CHECKOUT_AND_PYTHON,
         f"      - run: pip install ninja{pip}",
-        "      - name: Install compiler",
-        "        if: runner.os == 'Linux'",
-        "        run: ${{ matrix.install }}",
-    ]
-    if apt:
-        lines += [
-            "      - name: Install packages",
-            "        if: runner.os == 'Linux'",
-            f"        run: sudo apt-get install -y {' '.join(apt)}",
-        ]
-    lines += [
-        "      - name: MSVC developer environment",
-        "        if: runner.os == 'Windows'",
+        *apt_step(f"${{{{ matrix.packages }}}}{apt}", "test-${{ matrix.name }}-1", "runner.os == 'Linux'"),
+        *ccache_step("test-${{ matrix.name }}", "runner.os == 'Linux'"),
+        "      - if: runner.os == 'Windows'",
         "        uses: ilammy/msvc-dev-cmd@v1",
-        "      - run: cmake --preset debug",
+        "      - if: runner.os == 'Linux'",
+        "        run: >-",
+        "          cmake --preset debug",
+        "          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+        "      - if: runner.os == 'Windows'",
+        "        run: cmake --preset debug",
         "      - run: cmake --build --preset debug",
     ]
     if wrapper:
@@ -481,21 +502,59 @@ def github_ci_body(settings: Settings) -> str:
         lines.append("      - run: ctest --preset debug")
     variants = settings.sanitizer_variants()
     if variants:
-        lines += ["", *precommit_job("sanitizers", f"The push-stage hook: every test under {', '.join(variants)}.",
-                               tool, f"{wrapper}pre-commit run --all-files --hook-stage pre-push", {},
-                               settings)]
+        lines += [
+            "",
+            "  sanitizers:",
+            f"    # The push-stage hook: every test under {', '.join(variants)}.",
+            "    name: sanitizers",
+            f"    runs-on: {tool['os']}",
+            *env_lines({"CC": tool["cc"], "CXX": tool["cxx"],
+                        "CMAKE_C_COMPILER_LAUNCHER": "ccache", "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"}),
+            "    steps:",
+            *CHECKOUT_AND_PYTHON,
+            f"      - run: pip install ninja pre-commit{pip}",
+            *apt_step(f"{tool['packages']}{apt}", "sanitizers-1"),
+            *ccache_step("sanitizers"),
+            *PRECOMMIT_CACHE,
+            f"      - run: {wrapper}pre-commit run --all-files --hook-stage pre-push",
+        ]
     return "\n".join(lines) + "\n"
+
+
+COMPILER_REF = re.compile(r"\b(g\+\+|gcc|clang\+\+|clang)-(\d+)\b")
+
+
+def ci_warnings(settings: Settings, text: str) -> list[str]:
+    """Semantic problems in the repo's own CI file. Warnings, not drift: the repo owns the file."""
+    warnings = []
+    runs = [line for line in text.splitlines() if "pre-commit run" in line]
+    if not any("--hook-stage pre-push" not in line for line in runs):
+        warnings.append("never runs the commit-stage hooks (`pre-commit run`)")
+    if settings.sanitizer_variants() and not any("--hook-stage pre-push" in line for line in runs):
+        warnings.append("never runs the push-stage hooks (`pre-commit run --hook-stage pre-push`)")
+    floor = settings.repo["compilerFloor"]
+    for name, version in sorted(set(COMPILER_REF.findall(text))):
+        compiler = "gcc" if name in ("gcc", "g++") else "clang"
+        if version_tuple(version) < version_tuple(floor[compiler]):
+            warnings.append(f"uses {name}-{version}, below the {compiler} floor {floor[compiler]}")
+    if any(cell["compiler"] == "msvc" for cell in settings.repo["ci"]["matrix"]) and "windows" not in text:
+        warnings.append("has no Windows job, but cpp.repo.ci.matrix lists msvc")
+    return warnings
+
+
+def ci_report(settings: Settings, forge: dict) -> list[str] | None:
+    """Warnings for the CI file, or None when there is none to check."""
+    path = settings.root / CI_FILE
+    if forge["forge"] != "github" or not path.exists():
+        return None
+    return ci_warnings(settings, path.read_text(encoding="utf-8"))
 
 
 # --------------------------------------------------------------------------- generated files
 
 
-def generated_specs(settings: Settings, forge: dict) -> dict[str, dict]:
-    specs = {PRECOMMIT: {"body": precommit_body(settings), "source": "wf_cpp_repo.py precommit"}}
-    if forge["forge"] == "github":
-        specs[".github/workflows/ci.yml"] = {"body": github_ci_body(settings),
-                                             "source": "wf_cpp_repo.py github-ci"}
-    return specs
+def generated_specs(settings: Settings) -> dict[str, dict]:
+    return {PRECOMMIT: {"body": precommit_body(settings), "source": "wf_cpp_repo.py precommit"}}
 
 
 def header(settings: Settings, spec: dict) -> str:
@@ -565,13 +624,13 @@ def gh_api(args: list[str], payload: dict | None = None) -> tuple[int, str, str]
     return out.returncode, out.stdout, out.stderr
 
 
-def policy_for(settings: Settings, branch: str, forge: dict) -> dict:
+def policy_for(settings: Settings, branch: str, ran: list[str] | None = None) -> dict:
+    """`requiredChecks: "auto"` means the CI checks that actually reported on the branch (`ran`):
+    the repo owns its CI file, so its job names are only known from a run."""
     protection = settings.git["protection"]
     policy = {**protection["default"], **(protection["branches"].get(branch) or {})}
     required = protection["requiredChecks"]
-    if required == "auto":
-        required = ci_job_names(settings) if forge["forge"] == "github" else []
-    policy["requiredChecks"] = sorted(required)
+    policy["requiredChecks"] = sorted(ran or []) if required == "auto" else sorted(required)
     return policy
 
 
@@ -631,11 +690,11 @@ def policy_diff(current: dict | None, proposed: dict) -> list[str]:
 def checklist(settings: Settings, forge: dict) -> str:
     lines = [f"No forge adapter here ({forge['reason']}). Set these by hand in the forge's settings:"]
     for branch in protected_branches(settings):
-        policy = policy_for(settings, branch, forge)
+        policy = policy_for(settings, branch)
         lines.append(f"- {branch}:")
         lines.append(f"    merge only through a pull/merge request: {policy['requirePR']}")
         lines.append(f"    required approvals: {policy['approvals']}")
-        lines.append(f"    required CI checks: {', '.join(policy['requiredChecks']) or 'the CI jobs, once CI exists'}")
+        lines.append(f"    required CI checks: {', '.join(policy['requiredChecks']) or 'every CI job, by the names it reports'}")
         lines.append(f"    force push allowed: {policy['allowForcePush']}")
         lines.append(f"    deletion allowed: {policy['allowDeletion']}")
         lines.append(f"    linear history required: {policy['linearHistory']}")
@@ -643,12 +702,20 @@ def checklist(settings: Settings, forge: dict) -> str:
     return "\n".join(lines)
 
 
-def github_branch_state(slug: str, branch: str, settings: Settings, forge: dict) -> dict:
-    state: dict = {"branch": branch, "proposed": policy_for(settings, branch, forge)}
+def github_branch_state(slug: str, branch: str, settings: Settings) -> dict:
+    state: dict = {"branch": branch}
     code, _, err = gh_api([f"repos/{slug}/branches/{branch}"])
     if code != 0:
         state["error"] = (f"branch {branch} not found on {slug}; push it first"
                           if "404" in err or "Not Found" in err else err.strip())
+        return state
+    code, out, _ = gh_api([f"repos/{slug}/commits/{branch}/check-runs", "--jq",
+                           '[.check_runs[] | select(.app.slug == "github-actions") | .name]'])
+    ran = sorted(set(json.loads(out))) if code == 0 and out.strip() else []
+    state["proposed"] = policy_for(settings, branch, ran)
+    if settings.git["protection"]["requiredChecks"] == "auto" and not ran:
+        state["error"] = (f"no CI checks have reported on {branch}; run CI on it first, so the "
+                          "required checks are the job names the repo's CI really uses")
         return state
     code, out, err = gh_api([f"repos/{slug}/branches/{branch}/protection"])
     if code == 0:
@@ -659,9 +726,7 @@ def github_branch_state(slug: str, branch: str, settings: Settings, forge: dict)
         state["error"] = err.strip()
         return state
     state["diff"] = policy_diff(state["current"], state["proposed"])
-    # A required check that never reported on this branch blocks every PR into it.
-    code, out, _ = gh_api([f"repos/{slug}/commits/{branch}/check-runs", "--jq", "[.check_runs[].name]"])
-    ran = set(json.loads(out)) if code == 0 and out.strip() else set()
+    # An explicitly required check that never reported on this branch blocks every PR into it.
     state["neverRan"] = [name for name in state["proposed"]["requiredChecks"] if name not in ran]
     return state
 
@@ -685,7 +750,7 @@ def cmd_protect(args: argparse.Namespace) -> int:
         print("error: --apply writes one branch at a time; pass exactly one --branch", file=sys.stderr)
         return ERROR
 
-    states = [github_branch_state(slug, branch, settings, forge) for branch in branches]
+    states = [github_branch_state(slug, branch, settings) for branch in branches]
     if args.json and not args.apply:
         print(json.dumps({"forge": forge, "branches": states}, indent=2))
         return OK
@@ -736,7 +801,7 @@ def unified(rel: str, old: str, new: str) -> str:
 def forge_note(forge: dict) -> str:
     if forge["forge"] == "github":
         return f"forge: github ({forge['slug']})"
-    return f"forge: {forge['forge']} ({forge['reason']}); no CI file is generated"
+    return f"forge: {forge['forge']} ({forge['reason']}); no CI file is scaffolded"
 
 
 def cmd_scaffold(args: argparse.Namespace) -> int:
@@ -764,7 +829,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     forge = detect_forge(settings)
     print(forge_note(forge))
     changed = False
-    for rel, spec in generated_specs(settings, forge).items():
+    for rel, spec in generated_specs(settings).items():
         path = settings.root / rel
         new = full_text(settings, spec)
         old = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -790,15 +855,19 @@ def cmd_generate(args: argparse.Namespace) -> int:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
+    """Drift in the generated files (exit 1), plus warnings about the repo's own CI file (exit 0)."""
     settings = load(args.project)
     forge = detect_forge(settings)
-    report = {rel: drift(settings, rel, spec) for rel, spec in generated_specs(settings, forge).items()}
+    report = {rel: drift(settings, rel, spec) for rel, spec in generated_specs(settings).items()}
+    ci = ci_report(settings, forge)
     if args.json:
-        print(json.dumps({"forge": forge, "files": report}, indent=2))
+        print(json.dumps({"forge": forge, "files": report, "ciWarnings": ci}, indent=2))
     else:
         print(forge_note(forge))
         for rel, kinds in report.items():
             print(f"{rel}: {describe(kinds)}")
+        for warning in ci or []:
+            print(f"warning: {CI_FILE} {warning}")
     return DRIFT if any(report.values()) else OK
 
 
@@ -806,7 +875,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     settings = load(args.project)
     forge = detect_forge(settings)
     actions = scaffold_actions(settings, args.name)
-    generated = {rel: drift(settings, rel, spec) for rel, spec in generated_specs(settings, forge).items()}
+    generated = {rel: drift(settings, rel, spec) for rel, spec in generated_specs(settings).items()}
     status = {
         "root": str(settings.root),
         "cppEnabled": bool(settings.cpp.get("enabled")),
@@ -814,7 +883,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         "scaffold": {item["path"]: item["action"] for item in actions},
         "generated": generated,
         "sanitizers": settings.sanitizer_variants(),
-        "ciJobs": ci_job_names(settings) if forge["forge"] == "github" else [],
+        "ciWarnings": ci_report(settings, forge),
     }
     if args.json:
         print(json.dumps(status, indent=2))
@@ -826,8 +895,8 @@ def cmd_status(args: argparse.Namespace) -> int:
     for rel, kinds in generated.items():
         print(f"  generated {rel}: {describe(kinds)}")
     print(f"sanitizer variants: {', '.join(status['sanitizers']) or 'none'}")
-    if status["ciJobs"]:
-        print(f"CI jobs: {', '.join(status['ciJobs'])}")
+    for warning in status["ciWarnings"] or []:
+        print(f"warning: {CI_FILE} {warning}")
     return OK
 
 

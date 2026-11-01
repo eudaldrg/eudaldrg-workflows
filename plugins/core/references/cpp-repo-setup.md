@@ -7,11 +7,18 @@ changing the templates in `templates/cpp-repo/` or the generator in `scripts/wf_
 
 | Kind | Files | Why |
 |---|---|---|
-| Scaffolded once | CMake skeleton, presets, smoke test, check scripts, docs/tasks pages, AGENTS.md sections | This is where repos legitimately diverge: targets, dependencies, extra options, project-specific test notes. Config cannot express that, and regenerating would fight it. |
-| Generated + drift check | `.pre-commit-config.yaml`, the CI file | Pure policy: which checks run where, at which tool versions. Repos that differ here differ by a setting, so a setting is what they get. Silent drift across repos is the failure mode this prevents. |
+| Scaffolded once | CMake skeleton, presets, smoke test, check scripts, docs/tasks pages, AGENTS.md sections, the CI workflow | This is where repos legitimately diverge: targets, dependencies, extra options, project-specific test notes, CI caching and platform-specific test selection. Config cannot express that, and regenerating would fight it. |
+| Generated + drift check | `.pre-commit-config.yaml` | Pure policy: which hooks run at which stage, at which tool versions. Repos that differ here differ by a setting, so a setting is what they get. Silent drift across repos is the failure mode this prevents. |
 
 Rejected: everything scaffolded (defaults drift silently), everything generated (CMake becomes
 unworkable as soon as a repo has its first real target).
+
+**The CI file was generated at first and is now scaffolded.** A generator can only expose a fixed set
+of knobs (matrix, packages, env, a test wrapper), so every repo-specific CI need (a cache, a lint
+scope, a test label skipped on Windows) needed a plugin change before the repo could have it.
+clang-format and clang-tidy can take arbitrary overrides through config; a workflow cannot, so the
+repo owns it. What drift detection protected is now kept by semantic checks instead: `check` warns
+when the CI never runs a hook stage, uses a compiler below the floor, or lost its Windows job.
 
 Generated files follow AGENTS.md best practice #4: provenance header, hashes, no timestamp. The
 three drift kinds and their remedies mirror `sync-lint-rules` (`cpp-lint-rationale.md`).
@@ -82,13 +89,30 @@ off (it needs a Linux systemd user session; elsewhere it is a no-op).
   and produces the same `compile_commands.json`. `CXX=cl` is set explicitly, because CMake would
   otherwise find the runner's MinGW `g++` first.
 
-## CI extras
+## The reference CI workflow
 
-Repos with system dependencies (GUI or GL libraries, a virtual display for tests) set them in
-config rather than editing the CI file, so `check` stays clean: `cpp.repo.ci.aptPackages`,
-`pipPackages`, `env` and `testWrapper`. The wrapper applies only where tests run on Linux (the test
-job's ctest step and the sanitizer job), not to configure or build. The local pre-push hook does not
-use it; a developer machine has a display.
+What `scaffold` writes, and what the skill's CI rules ask a hand-edited file to keep:
+
+- lint job: commit-stage hooks, on a PR's changed files only (`--from-ref origin/<base> --to-ref
+  HEAD`, checkout `fetch-depth: 0`), on every file for pushes to the protected branches;
+- test job: every matrix compiler, Linux and Windows, ccache on Linux;
+- sanitizer job: the push-stage hook;
+- apt packages cached by `awalsh128/cache-apt-pkgs-action` (keyed on the package list plus a
+  `version` string to bump), the pre-commit environments by `actions/cache`.
+
+`cpp.repo.ci.aptPackages`, `pipPackages`, `env` and `testWrapper` shape only the first scaffold
+(e.g. GUI/GL dev packages, `xvfb-run -a` for tests that need a display). After that, edit the file.
+The local pre-push hook does not use the wrapper; a developer machine has a display.
+
+## cppcheck is not pinned
+
+clang-format and clang-tidy come from PyPI wheels, so every machine runs the same version. cppcheck
+has no such wheel (the PyPI package named `cppcheck` is an unrelated project), so the hook runs
+whatever the system has: Ubuntu 24.04's 2.13 in CI, often a newer one locally. The two can
+disagree, typically a false positive the newer version fixed. Suppress such a finding inline with
+`// cppcheck-suppress <id>` and a reason naming the version, and drop the suppression when CI's
+cppcheck catches up. Pinning would need conda (`language: conda`) or a source build in CI; neither
+is worth it yet.
 
 ## Compiler floor
 
@@ -112,7 +136,8 @@ stale test binary running.
 
 `feature/<slug>` → PR into the integration branch (`dev`), squash-merged by the owner; release =
 integration → release branch (`main`) as a merge commit, then tag `vX.Y.Z` there. Defaults for both
-protected branches: PR required, required checks = every generated CI job, no force push, no
+protected branches: PR required, required checks = every CI check that reported on the branch
+(the repo owns its CI, so its job names are read from a run, not predicted), no force push, no
 deletion, admins included, **0 approvals** (the owner's own PRs could never merge otherwise; "the
 owner reviews" is an AGENTS.md rule, not a forge setting), and **no linear history** (it would
 reject the release merge commit).

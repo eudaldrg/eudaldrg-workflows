@@ -14,8 +14,9 @@ cmake --preset debug
 pre-commit install && pre-commit install --hook-type pre-push
 ```
 
-`.pre-commit-config.yaml` and the CI workflow are generated from `.claude/workflows.json` by
-`/core:setup-cpp-repo`; edit the config and regenerate, never the files.
+`.pre-commit-config.yaml` is generated from `.claude/workflows.json` by `/core:setup-cpp-repo`;
+edit the config and regenerate, never the file. The CI workflow is this repo's own file: it must keep
+running both hook stages, on Linux and Windows, with compilers at or above the floor.
 
 ## Branches and pull requests
 
