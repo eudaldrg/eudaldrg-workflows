@@ -96,7 +96,9 @@ Enforced twice: `cmake/ProjectSettings.cmake` fails configuration below the floo
 `17.8` maps to `MSVC_VERSION` 1938), and `generate` refuses a CI matrix cell below it. CI installs
 the pinned compiler rather than taking the runner default; for Clang on Linux it also installs the
 libstdc++ of the GCC floor, because Clang uses the system libstdc++ and an older one lacks newer
-headers (`<print>` arrived in libstdc++ 14). A cell whose compiler is not in the runner's apt
+headers (`<print>` arrived in libstdc++ 14). The default Clang floor is 19, not 18: libstdc++ 14 declares `std::expected`
+only when `__cpp_concepts >= 202002L`, which Clang 18 does not report (201907L), so a C++23 repo
+using `std::expected` fails to build with Clang 18 on libstdc++. A cell whose compiler is not in the runner's apt
 archive sets its own `install` command.
 
 ## Test targets

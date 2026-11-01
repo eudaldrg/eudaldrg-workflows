@@ -10,7 +10,7 @@ import wf_cpp_repo as cr  # noqa: E402
 from test_wf_cpp_repo import RepoCase  # noqa: E402
 
 SLUG = "example/demo"
-JOBS = ["lint", "sanitizers", "test (clang-18)", "test (gcc-14)", "test (msvc)"]
+JOBS = ["lint", "sanitizers", "test (clang-19)", "test (gcc-14)", "test (msvc)"]
 
 
 class FakeGh:

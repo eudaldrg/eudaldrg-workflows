@@ -152,7 +152,7 @@ class GenerateTest(RepoCase):
         self.assertIn("ilammy/msvc-dev-cmd@v1", body)
         self.assertIn("apt-get install -y cppcheck", body)
         self.assertEqual(cr.ci_job_names(settings),
-                         ["lint", "test (gcc-14)", "test (clang-18)", "test (msvc)", "sanitizers"])
+                         ["lint", "test (gcc-14)", "test (clang-19)", "test (msvc)", "sanitizers"])
 
     def test_ci_extras(self):
         self.config({"cpp": {"repo": {"ci": {

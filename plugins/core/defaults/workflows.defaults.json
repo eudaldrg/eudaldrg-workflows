@@ -92,7 +92,7 @@
     "clangTidy": { "checksAdd": [], "checksRemove": [], "options": {}, "scalars": {} },
     "repo": {
       "cxxStandard": 23,
-      "compilerFloor": { "gcc": "14", "clang": "18", "msvc": "17.8" },
+      "compilerFloor": { "gcc": "14", "clang": "19", "msvc": "17.8" },
       "checks": {
         "cppcheck": true,
         "sanitizers": { "asanUbsan": true, "tsan": false },
@@ -106,7 +106,7 @@
         "testWrapper": "",
         "matrix": [
           { "os": "ubuntu-24.04", "compiler": "gcc", "version": "14" },
-          { "os": "ubuntu-24.04", "compiler": "clang", "version": "18" },
+          { "os": "ubuntu-24.04", "compiler": "clang", "version": "19" },
           { "os": "windows-2022", "compiler": "msvc" }
         ]
       }
