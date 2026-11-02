@@ -396,7 +396,7 @@ def evaluate_when(predicate: object, root: Path) -> bool:
 
 KNOWN_TOP_LEVEL = {
     "version", "init", "knowledge", "plan", "implement", "sessions", "briefing", "autoLearn", "sessionWrap",
-    "cpp", "git", "gitDiff", "statusLine", "projects",
+    "reports", "cpp", "git", "gitDiff", "statusLine", "projects",
 }
 
 ENUMS = {
@@ -509,6 +509,10 @@ def validate(merged: dict, loaded: list[tuple[str, dict]], strict: bool) -> list
         isinstance(required, list) and all(isinstance(item, str) for item in required)
     ):
         problems.append("git.protection.requiredChecks: expected \"auto\" or a list of strings")
+
+    publish, found = lookup(merged, "reports.publishCmd")
+    if found and publish is not None and not (isinstance(publish, str) and "{file}" in publish):
+        problems.append("reports.publishCmd: expected null or a command string containing {file}")
 
     matrix, found = lookup(merged, "cpp.repo.ci.matrix")
     if found and isinstance(matrix, list):
