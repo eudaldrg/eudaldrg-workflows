@@ -56,6 +56,7 @@ python3 plugins/core/scripts/wf_config.py doctor
 | Skill | `session-wrap` | Reviews a session for corrections and gaps and updates the project docs or skills. |
 | Skill | `auto-learn` | Moves rules recorded in one project's memory to where they belong. |
 | Skill | `session-briefing` | Summarises recent sessions, commits, PRs and mail across projects as an HTML page. |
+| Skill | `report` | Writes a plan, investigation or summary as Markdown, renders it to HTML, and publishes it through `reports.publishCmd` or opens it locally. |
 | Skill | `init-model-agnostic` | Converts a repo to `AGENTS.md` with tool-specific files as symlinks, using `git mv`. |
 | Skill | `sync-lint-rules` | Generates a C++ project's `.clang-format` and `.clang-tidy` from shared rules plus overrides. |
 | Skill | `setup-cpp-repo` | Sets up a C++ repo: CMake skeleton, check scripts, pre-commit hooks, CI on Linux and Windows, branch model and forge protection. |
