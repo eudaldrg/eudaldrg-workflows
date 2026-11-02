@@ -135,5 +135,10 @@ Lean startup context (`references/lean-context.md` has the reasoning and the mea
   files instead of artifacts. They load the built-in `artifact-design` / `artifact-diagramming`
   skills and override only the hosted-artifact parts, so upstream updates flow through.
 
+Reports: `/core:report` writes a plan, investigation or summary as Markdown and renders it with
+`scripts/wf_render.py` to one standalone HTML file. Publishing is a user setting,
+`reports.publishCmd` (placeholders `{file}`, `{title}`, `{kind}`, shell-quoted); with it null the
+report is the local file, opened in a browser. Keep viewer-specific commands out of this repo.
+
 Output style: the third-party caveman plugin is on trial at project scope; `references/caveman-style.md`
 has what it does, what it costs, the evidence so far, and how to install or undo it.

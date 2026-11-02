@@ -82,6 +82,10 @@
     "mode": "ask"
   },
 
+  "reports": {
+    "publishCmd": null
+  },
+
   "cpp": {
     "enabled": false,
     "generatedFiles": [".clang-format", ".clang-tidy"],

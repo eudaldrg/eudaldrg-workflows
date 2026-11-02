@@ -20,7 +20,9 @@ from pathlib import Path
 
 SUPPORTED = (
     "headings, paragraphs, bullet and numbered lists, fenced code, inline code, "
-    "GFM pipe tables, blockquotes, horizontal rules, links, bold, italic, strikethrough"
+    "GFM pipe tables, blockquotes, horizontal rules, links, bold, italic, strikethrough, "
+    "inline SVG in ```svg fences (one <svg>...</svg> element, no script, event handlers, "
+    "javascript: URLs or embedded documents; anything else renders as code)"
 )
 
 CODE_SPAN = re.compile(r"`([^`]+)`")
@@ -34,6 +36,12 @@ NUMBERED = re.compile(r"^(\s*)\d+[.)]\s+(.*)$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 FENCE = re.compile(r"^```(\w*)\s*(.*)$")
 RULE = re.compile(r"^\s*([-*_])\1{2,}\s*$")
+# What makes an SVG active. A report opened from disk runs with no sandbox, so a ```svg fence is
+# emitted raw only when none of these appear — checked on the source and on its entity-decoded form,
+# because attribute values decode `&#106;avascript:` before the browser acts on them.
+ACTIVE_SVG = re.compile(
+    r"<script|(?<![\w-])on\w+\s*=|javascript:|<foreignobject|<iframe|<embed|<object", re.IGNORECASE
+)
 
 STYLE = """
 :root {
@@ -71,6 +79,8 @@ pre {
   overflow-x: auto; border: 1px solid var(--rule);
 }
 pre code { background: none; padding: 0; font-size: .85em; }
+figure { margin: 0 0 1rem; }
+figure svg { display: block; max-width: 100%; height: auto; }
 blockquote {
   margin-left: 0; padding: .1rem 0 .1rem 1rem; border-left: 3px solid var(--rule);
   color: var(--muted);
@@ -114,6 +124,14 @@ def inline(text: str) -> str:
 
 
 # --------------------------------------------------------------------------- blocks
+
+
+def inert_svg(source: str) -> bool:
+    """True when a stripped ```svg fence body is one static <svg> element safe to emit as-is."""
+    if not (source.startswith("<svg") and source.endswith("</svg>")):
+        return False
+    decoded = re.sub(r"\s+", "", html.unescape(source))
+    return not (ACTIVE_SVG.search(source) or ACTIVE_SVG.search(decoded))
 
 
 def split_row(line: str) -> list[str]:
@@ -234,8 +252,12 @@ def to_html(markdown: str) -> str:
                 body.append(lines[index])
                 index += 1
             index += 1  # closing fence, or end of input
+            text = "\n".join(body)
+            if language == "svg" and inert_svg(svg := text.strip()):
+                out.append(f"<figure>{svg}</figure>")
+                continue
             attribute = f' class="language-{html.escape(language)}"' if language else ""
-            out.append(f"<pre><code{attribute}>{html.escape(chr(10).join(body))}</code></pre>")
+            out.append(f"<pre><code{attribute}>{html.escape(text)}</code></pre>")
             continue
 
         if RULE.match(line):

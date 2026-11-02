@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -396,7 +397,7 @@ def evaluate_when(predicate: object, root: Path) -> bool:
 
 KNOWN_TOP_LEVEL = {
     "version", "init", "knowledge", "plan", "implement", "sessions", "briefing", "autoLearn", "sessionWrap",
-    "cpp", "git", "gitDiff", "statusLine", "projects",
+    "reports", "cpp", "git", "gitDiff", "statusLine", "projects",
 }
 
 ENUMS = {
@@ -509,6 +510,10 @@ def validate(merged: dict, loaded: list[tuple[str, dict]], strict: bool) -> list
         isinstance(required, list) and all(isinstance(item, str) for item in required)
     ):
         problems.append("git.protection.requiredChecks: expected \"auto\" or a list of strings")
+
+    publish, found = lookup(merged, "reports.publishCmd")
+    if found and publish is not None and not (isinstance(publish, str) and "{file}" in publish):
+        problems.append("reports.publishCmd: expected null or a command string containing {file}")
 
     matrix, found = lookup(merged, "cpp.repo.ci.matrix")
     if found and isinstance(matrix, list):
@@ -666,6 +671,33 @@ def cmd_checks(args: argparse.Namespace) -> int:
     return OK
 
 
+def expand_template(template: str, values: dict[str, str]) -> str:
+    """Fill `{name}` placeholders with shell-quoted values, in one pass, so a value that itself
+    contains `{name}` is never substituted again. Unknown placeholders are left as written."""
+    return re.sub(
+        r"\{(\w+)\}",
+        lambda m: shlex.quote(values[m[1]]) if m[1] in values else m[0],
+        template,
+    )
+
+
+def cmd_expand(args: argparse.Namespace) -> int:
+    merged, _, _ = load_all(args.project)
+    template, found = lookup(merged, args.key)
+    if not found or template is None:
+        return OK
+    if not isinstance(template, str):
+        raise ConfigError(f"{args.key}: expected a command string", ERR_SCHEMA)
+    values = {}
+    for pair in args.values:
+        name, sep, value = pair.partition("=")
+        if not sep:
+            raise ConfigError(f"expected name=value, got {pair!r}", ERR_SCHEMA)
+        values[name] = value
+    print(expand_template(template, values))
+    return OK
+
+
 def cmd_projects(args: argparse.Namespace) -> int:
     if args.scan:
         base = Path(args.scan).expanduser().resolve()
@@ -772,6 +804,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--scoped", metavar="FILES", help="emit only scoped checks, with {files} substituted"
     )
     checks.set_defaults(func=cmd_checks)
+
+    expand = sub.add_parser(
+        "expand",
+        help="print a command-template setting with {name} placeholders filled, shell-quoted; "
+        "prints nothing when the setting is unset or null",
+    )
+    expand.add_argument("key")
+    expand.add_argument("values", nargs="*", metavar="name=value")
+    expand.set_defaults(func=cmd_expand)
 
     projects = sub.add_parser("projects", help="list or discover known projects")
     projects.add_argument("--json", action="store_true")
