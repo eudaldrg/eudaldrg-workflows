@@ -1,22 +1,9 @@
-import contextlib
-import io
-import json
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugins/core/scripts"))
-import wf_config  # noqa: E402
-
-DEFAULTS = Path(__file__).resolve().parents[1] / "plugins/core/defaults/workflows.defaults.json"
-
-
-def problems(project_layer: dict) -> list[str]:
-    defaults = json.loads(DEFAULTS.read_text(encoding="utf-8"))
-    loaded = [("defaults", defaults), ("project", project_layer)]
-    merged, _ = wf_config.merge_layers(loaded)
-    with contextlib.redirect_stderr(io.StringIO()):
-        return wf_config.validate(merged, loaded, strict=False)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wf_test_util import load_defaults, problems  # noqa: E402
 
 
 class CppRepoConfigTest(unittest.TestCase):
@@ -24,7 +11,7 @@ class CppRepoConfigTest(unittest.TestCase):
         self.assertEqual(problems({}), [])
 
     def test_defaults_have_agreed_values(self):
-        defaults = json.loads(DEFAULTS.read_text(encoding="utf-8"))
+        defaults = load_defaults()
         checks = defaults["cpp"]["repo"]["checks"]
         self.assertTrue(checks["cppcheck"])
         self.assertFalse(checks["sanitizers"]["tsan"])

@@ -126,9 +126,8 @@ def inline(text: str) -> str:
 # --------------------------------------------------------------------------- blocks
 
 
-def inert_svg(body: str) -> bool:
-    """True when a ```svg fence is a single static <svg> element safe to emit as-is."""
-    source = body.strip()
+def inert_svg(source: str) -> bool:
+    """True when a stripped ```svg fence body is one static <svg> element safe to emit as-is."""
     if not (source.startswith("<svg") and source.endswith("</svg>")):
         return False
     decoded = re.sub(r"\s+", "", html.unescape(source))
@@ -253,11 +252,12 @@ def to_html(markdown: str) -> str:
                 body.append(lines[index])
                 index += 1
             index += 1  # closing fence, or end of input
-            if language == "svg" and inert_svg("\n".join(body)):
-                out.append(f"<figure>{chr(10).join(body).strip()}</figure>")
+            text = "\n".join(body)
+            if language == "svg" and inert_svg(svg := text.strip()):
+                out.append(f"<figure>{svg}</figure>")
                 continue
             attribute = f' class="language-{html.escape(language)}"' if language else ""
-            out.append(f"<pre><code{attribute}>{html.escape(chr(10).join(body))}</code></pre>")
+            out.append(f"<pre><code{attribute}>{html.escape(text)}</code></pre>")
             continue
 
         if RULE.match(line):

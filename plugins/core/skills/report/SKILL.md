@@ -25,67 +25,50 @@ Cite code as `path:line` and commits by short sha. Keep it to what a reader need
 
 ## 2. Write Markdown only
 
-Stay inside the subset the renderer supports; anything outside it shows as plain text:
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_render.py" --supported
-```
+Stay inside the subset the renderer supports; anything outside it shows as plain text. Run
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_render.py" --supported` if unsure.
 
 Start the file with `# <title>`. Tables, lists and fenced code cover most needs.
 
-A diagram goes in a ```` ```svg ```` fence holding one `<svg>…</svg>` element, drawn with
-`currentColor` (and `fill="none"` where shapes should not be solid) so it reads in light and dark
-themes. Load `/core:html-diagramming` for what to draw. The renderer only emits static SVG: a fence
-with `<script>`, `on…=` handlers, `javascript:` URLs or `<foreignObject>` renders as code instead, so
-draw only shapes, paths and text. Only draw when the picture shows something prose cannot.
+A diagram goes in a ```` ```svg ```` fence holding one `<svg>…</svg>` element of plain shapes, paths
+and text, drawn with `currentColor` (and `fill="none"` where shapes should not be solid) so it reads
+in light and dark themes. Load `/core:html-diagramming` for what to draw, and draw only when the
+picture shows something prose cannot. The renderer emits only static SVG; anything active in the
+fence makes it render as code instead.
 
 ## 3. Render
 
 Both files go in the reports state directory, named `{date}-{slug}`:
 
 ```bash
-DIR="$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_config.py" state-dir reports.dir --default reports)"
-BASE="$DIR/$(date +%F)-<slug>"      # slug: lowercase title, words joined by '-'
+S="${CLAUDE_PLUGIN_ROOT}/scripts"
+DATE="$(date +%F)"
+DIR="$(python3 "$S/wf_config.py" state-dir reports.dir --default reports)"
+BASE="$DIR/$DATE-<slug>"      # slug: lowercase title, words joined by '-'
 ```
 
 Write the Markdown to `$BASE.md` with the Write tool, then:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_render.py" "$BASE.md" \
-    --title "<title>" --subtitle "<kind> · $(date +%F)" -o "$BASE.html"
+python3 "$S/wf_render.py" "$BASE.md" --title "<title>" --subtitle "<kind> · $DATE" -o "$BASE.html"
 ```
 
 ## 4. Publish or open
 
-```bash
-CMD="$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_config.py" get reports.publishCmd)"
-```
-
-**`CMD` is empty** (the default): open the page locally. That is the whole outcome.
+`reports.publishCmd` is a command template with `{file}` (the `.html` path), `{title}` and `{kind}`
+placeholders. `expand` fills them in, shell-quoted, and prints nothing when the setting is null:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_open.py" "$BASE.html"
+CMD="$(python3 "$S/wf_config.py" expand reports.publishCmd \
+    file="$BASE.html" title="<title>" kind="<kind>")"
+if [ -n "$CMD" ]; then bash -c "$CMD"; else python3 "$S/wf_open.py" "$BASE.html"; fi
 ```
 
-`wf_open.py` exits 1 and prints the path when there is no browser; that is a complete outcome on a
-headless box, not a failure.
-
-**`CMD` is set:** substitute `{file}` (the `.html` path), `{title}` and `{kind}`, each shell-quoted, in
-one pass so a value containing a placeholder is never substituted twice, then run it:
-
-```bash
-python3 - "$CMD" "$BASE.html" "<title>" "<kind>" <<'PY'
-import re, shlex, subprocess, sys
-cmd, *values = sys.argv[1:]
-fields = dict(zip(("file", "title", "kind"), values))
-cmd = re.sub(r"\{(file|title|kind)\}", lambda m: shlex.quote(fields[m[1]]), cmd)
-sys.exit(subprocess.run(cmd, shell=True).returncode)
-PY
-```
-
-The command is the user's own setting; do not edit it, add flags to it, or guess what it talks to.
-If it exits non-zero, report its error output and the local path, then open the file with
-`wf_open.py` so the report is not lost.
+- **Null** (the default): the report is the local file, opened in a browser. `wf_open.py` exits 1 and
+  prints the path when there is no browser; that is a complete outcome on a headless box.
+- **Set:** the command is the user's own setting. Do not edit it, add flags, or guess what it talks to.
+  If it exits non-zero, report its error output and the local path, then open the file with
+  `wf_open.py` so the report is not lost.
 
 ## 5. Report back
 
