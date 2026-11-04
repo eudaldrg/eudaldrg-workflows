@@ -121,6 +121,12 @@ Install through the marketplace:
 
 Skills are namespaced by plugin name, so they appear as `/core:<skill-name>`.
 
+C++ repos: `/core:setup-cpp-repo` scaffolds a CMake skeleton (GCC/Clang/MSVC warnings, sanitizers,
+GoogleTest), Python check scripts, docs/tasks pages and a reference CI workflow once, and keeps
+`.pre-commit-config.yaml` generated from `cpp.repo` with a drift check; `check` also warns about a
+repo's CI dropping a hook stage or the compiler floor. Forge-specific parts go through adapters,
+GitHub only for now. `references/cpp-repo-setup.md` has the decisions.
+
 Lean startup context (`references/lean-context.md` has the reasoning and the measurements):
 
 - `/core:setup-lean-context` writes three keys into `~/.claude/settings.json` — deny `Artifact`,
@@ -128,6 +134,11 @@ Lean startup context (`references/lean-context.md` has the reasoning and the mea
 - `/core:html-design` and `/core:html-diagramming` write pages and diagrams as local `.html`
   files instead of artifacts. They load the built-in `artifact-design` / `artifact-diagramming`
   skills and override only the hosted-artifact parts, so upstream updates flow through.
+
+Reports: `/core:report` writes a plan, investigation or summary as Markdown and renders it with
+`scripts/wf_render.py` to one standalone HTML file. Publishing is a user setting,
+`reports.publishCmd` (placeholders `{file}`, `{title}`, `{kind}`, shell-quoted); with it null the
+report is the local file, opened in a browser. Keep viewer-specific commands out of this repo.
 
 Output style: the third-party caveman plugin is on trial at project scope; `references/caveman-style.md`
 has what it does, what it costs, the evidence so far, and how to install or undo it.

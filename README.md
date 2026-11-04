@@ -50,14 +50,17 @@ python3 plugins/core/scripts/wf_config.py doctor
 | Skill | `simplify-design` | Reviews ADRs and design docs for rules that should be settings, or should not exist. |
 | Skill | `generate-plan` | Turns a piece of work into a plan file: prose context plus a machine-readable task graph. |
 | Skill | `implement-plan` | Executes a plan task by task, running checks and committing each task; resumable from git. |
+| Skill | `pull-request` | Opens or updates a PR: one topic, the right base, a description sized to the change, and a recommended merge method (rebase, squash or merge commit) from the branch's shape. |
 | Skill | `investigate` | Read-only investigation of a codebase question, returning a cited findings report. |
 | Skill | `retrieve-knowledge` | Finds the project docs relevant to the module or procedure about to be worked on. |
 | Skill | `update-knowledge` | Writes or refreshes project docs, organised by component and by activity. |
 | Skill | `session-wrap` | Reviews a session for corrections and gaps and updates the project docs or skills. |
 | Skill | `auto-learn` | Moves rules recorded in one project's memory to where they belong. |
 | Skill | `session-briefing` | Summarises recent sessions, commits, PRs and mail across projects as an HTML page. |
+| Skill | `report` | Writes a plan, investigation or summary as Markdown, renders it to HTML, and publishes it through `reports.publishCmd` or opens it locally. |
 | Skill | `init-model-agnostic` | Converts a repo to `AGENTS.md` with tool-specific files as symlinks, using `git mv`. |
 | Skill | `sync-lint-rules` | Generates a C++ project's `.clang-format` and `.clang-tidy` from shared rules plus overrides. |
+| Skill | `setup-cpp-repo` | Sets up a C++ repo: CMake skeleton, check scripts, pre-commit hooks, CI on Linux and Windows, branch model and forge protection. |
 | Skill | `setup-statusline` | Installs the shared status line into `~/.claude/settings.json`. |
 | Skill | `setup-lean-context` | Applies, checks or reverts settings that shrink the startup context. |
 | Skill | `setup-git-diff` | Installs difftastic and delta behind opt-in git aliases. |

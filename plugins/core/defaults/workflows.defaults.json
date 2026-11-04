@@ -34,6 +34,7 @@
     "commitGranularity": "task",
     "maxAttemptsPerTask": 3,
     "finalFullCheck": true,
+    "simplifyBeforePush": true,
     "checks": [
       {
         "id": "precommit",
@@ -41,6 +42,13 @@
         "cmd": "pre-commit run --all-files",
         "scopedCmd": "pre-commit run --files {files}",
         "when": "exists:.pre-commit-config.yaml",
+        "blocking": true
+      },
+      {
+        "id": "sanitizers",
+        "order": 40,
+        "cmd": "pre-commit run --all-files --hook-stage pre-push",
+        "when": "exists:scripts/run_sanitizers.py",
         "blocking": true
       }
     ]
@@ -74,6 +82,10 @@
     "mode": "ask"
   },
 
+  "reports": {
+    "publishCmd": null
+  },
+
   "cpp": {
     "enabled": false,
     "generatedFiles": [".clang-format", ".clang-tidy"],
@@ -81,7 +93,28 @@
     "minClangTidyVersion": "19",
     "driftCheck": "warn",
     "clangFormat": { "overrides": {}, "unset": [] },
-    "clangTidy": { "checksAdd": [], "checksRemove": [], "options": {}, "scalars": {} }
+    "clangTidy": { "checksAdd": [], "checksRemove": [], "options": {}, "scalars": {} },
+    "repo": {
+      "cxxStandard": 23,
+      "compilerFloor": { "gcc": "14", "clang": "19", "msvc": "17.8" },
+      "checks": {
+        "cppcheck": true,
+        "sanitizers": { "asanUbsan": true, "tsan": false },
+        "memoryCap": false
+      },
+      "tools": { "clangFormat": "21.1.8", "clangTidy": "21.1.6", "cppcheck": "2.19.0", "googletest": "v1.18.0" },
+      "ci": {
+        "aptPackages": [],
+        "pipPackages": [],
+        "env": {},
+        "testWrapper": "",
+        "matrix": [
+          { "os": "ubuntu-24.04", "compiler": "gcc", "version": "14" },
+          { "os": "ubuntu-24.04", "compiler": "clang", "version": "19" },
+          { "os": "windows-2022", "compiler": "msvc" }
+        ]
+      }
+    }
   },
 
   "statusLine": {
@@ -110,7 +143,16 @@
     "protectedBranches": ["main", "master"],
     "askBeforePR": true,
     "askBeforeMerge": true,
-    "askBeforePush": true
+    "askBeforePush": true,
+    "forge": "auto",
+    "integrationBranch": "dev",
+    "releaseBranch": "main",
+    "protection": {
+      "requiredChecks": "auto",
+    "squashMessage": "pr",
+      "default": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false, "enforceAdmins": true },
+      "branches": {}
+    }
   },
 
   "projects": {}

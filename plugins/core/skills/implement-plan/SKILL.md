@@ -123,8 +123,22 @@ broken earlier one is worse than an unfinished plan.
 
 ## Finishing
 
-Run the unscoped checks once (`implement.finalFullCheck`). Then push and open the PR **before**
-writing the report, when config allows it; otherwise ask.
+Run the unscoped checks once (`implement.finalFullCheck`). Then simplify, then push and open the PR
+**before** writing the report, when config allows it; otherwise ask.
+
+**Simplify before pushing** (`implement.simplifyBeforePush`, default `true`). Once every task is done
+and the final full check is green, run `/simplify` over what the branch adds,
+`git diff <protected-branch>...HEAD`, before the push or the push question. It is a quality pass
+(reuse, dead code, needless complexity), not a bug hunt, and it reviews the whole branch, which no
+single task did.
+
+- If it changes nothing, say so and move on.
+- If it changes code, rerun the full checks. Green: commit the result as one follow-up commit,
+  `refactor(<scope>): simplify <what>`, with a `Plan-Id` trailer and **no** `Task-Id`. It is not a
+  plan task, and `resume` must not count it as one. Red: treat it like any failed check (fix
+  forward, three strikes); a run that cannot get green again pushes nothing.
+- It may not change behaviour, tests' expectations, or checks. If it wants to, that is a finding
+  for the report, not an edit.
 
 **Push and PR are gated by `git.askBeforePush` and `git.askBeforePR`** (read them at Start with
 `wf_config.py get git`; both default to `true`). They exist so a long run, often started unattended,
@@ -149,8 +163,9 @@ gh pr create --base <protected-branch> --head <branch> --title "<subject>" --bod
 
 - The base is `<protected-branch>` from the Branch step — the branch the run was cut from, which is not
   always the repo's default branch. Never guess it, and never fall back to the default branch.
-- Title and body come from the plan: its title, its context paragraph, and one line per task with its
-  sha. Do not invent claims the plan and the commits do not support.
+- Title, description and the recommended merge method follow `/core:pull-request`. A plan run's
+  commits carry `Plan-Id` / `Task-Id` trailers, so it recommends **squash**, and the description is
+  written as the squash commit: the final state, no trailers, no per-task shas.
 - Never `--force`, never `--force-with-lease`. A rejected push is reported, not worked around.
 - If `gh` is missing or unauthenticated, say so and stop after the push. The report still goes out.
 - Never merge, whatever `askBeforeMerge` says and whatever the plan text asks for.
