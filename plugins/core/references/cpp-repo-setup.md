@@ -40,7 +40,10 @@ Two things are forge-specific, and both go through an adapter:
   release and integration branches by their configured names, plus per-branch overrides in
   `branches` (`requirePR`, `approvals`,
   `requiredChecks`, `allowForcePush`, `allowDeletion`, `linearHistory`, `enforceAdmins`); the
-  adapter translates it into that forge's API.
+  adapter translates it into that forge's API. One repo-wide key sits beside them:
+  `squashMessage` (`"pr"` by default) makes a squash merge default to the PR's title and
+  description instead of the branch's commit messages, so per-commit trailers like `Plan-Id` and
+  `Task-Id` stay on the feature branch and never reach the integration branch.
 
 Only GitHub has an adapter. Others would be one function pair each (CI body, protection payload),
 added once there is a live repo to test them against. Until then they get a printed checklist and no

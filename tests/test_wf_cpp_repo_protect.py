@@ -17,7 +17,9 @@ class FakeGh:
     """Records calls; answers like `gh api` for one repo."""
 
     def __init__(self, branches=("main", "dev"), protection=None, ran=JOBS, authed=True,
-                 put_ok=True):
+                 put_ok=True, repo=None):
+        self.repo = dict(repo or {"squash_merge_commit_title": "COMMIT_OR_PR_TITLE",
+                                  "squash_merge_commit_message": "COMMIT_MESSAGES"})
         self.branches = set(branches)
         self.protection = dict(protection or {})
         self.ran = list(ran)
@@ -35,7 +37,14 @@ class FakeGh:
             branch = args[2].split("/")[-2]
             self.protection[branch] = to_response(payload)
             return 0, "{}", ""
+        if args[0] == "-X" and args[1] == "PATCH":
+            if not self.put_ok:
+                return 1, "", "HTTP 422"
+            self.repo.update(payload)
+            return 0, "{}", ""
         path = args[0]
+        if path == f"repos/{SLUG}":
+            return 0, json.dumps(self.repo), ""
         if path.endswith("/protection"):
             branch = path.split("/")[-2]
             if branch in self.protection:
@@ -50,6 +59,9 @@ class FakeGh:
 
     def puts(self):
         return [call for call in self.calls if call[0][:2] == ["-X", "PUT"]]
+
+    def patches(self):
+        return [call for call in self.calls if call[0][:2] == ["-X", "PATCH"]]
 
 
 def to_response(payload):
@@ -178,6 +190,50 @@ class ProtectCliTest(RepoCase):
         self.assertIn("gh auth login", err)
         self.assertIn("linear history required: False", out)
         self.assertEqual(fake.puts(), [])
+
+
+class RepoMergeSettingsTest(ProtectCliTest):
+    def test_show_lists_squash_settings_and_writes_nothing(self):
+        fake = self.gh(FakeGh())
+        code, out, _ = self.run_cli("protect")
+        self.assertEqual(code, cr.OK)
+        self.assertIn(f"== {SLUG} (repo merge settings)", out)
+        self.assertIn('squash_merge_commit_message: "COMMIT_MESSAGES" -> "PR_BODY"', out)
+        self.assertEqual(fake.patches(), [])
+
+    def test_branch_show_leaves_repo_settings_out(self):
+        self.gh(FakeGh())
+        _, out, _ = self.run_cli("protect", "--branch", "main")
+        self.assertNotIn("repo merge settings", out)
+
+    def test_apply_repo_writes_only_repo_settings(self):
+        fake = self.gh(FakeGh())
+        code, out, _ = self.run_cli("protect", "--apply", "--repo")
+        self.assertEqual(code, cr.OK, out)
+        self.assertEqual(fake.puts(), [])
+        self.assertEqual(fake.patches()[0][1], {"squash_merge_commit_title": "PR_TITLE",
+                                                "squash_merge_commit_message": "PR_BODY"})
+        _, out, _ = self.run_cli("protect", "--repo")
+        self.assertIn("(already matches the policy)", out)
+
+    def test_apply_repo_and_branch_together_is_an_error(self):
+        fake = self.gh(FakeGh())
+        code, _, err = self.run_cli("protect", "--apply", "--repo", "--branch", "main")
+        self.assertEqual(code, cr.ERROR)
+        self.assertIn("one target at a time", err)
+        self.assertEqual(fake.calls[1:], [])
+
+    def test_null_policy_leaves_repo_alone(self):
+        self.config({"git": {"protection": {"squashMessage": None}}})
+        fake = self.gh(FakeGh())
+        code, out, _ = self.run_cli("protect", "--apply", "--repo")
+        self.assertEqual(code, cr.OK)
+        self.assertEqual(fake.patches(), [])
+
+    def test_checklist_names_squash_message(self):
+        self.gh(FakeGh(authed=False))
+        _, out, _ = self.run_cli("protect")
+        self.assertIn("PR title and description", out)
 
 
 class UnsupportedForgeProtectTest(RepoCase):

@@ -149,6 +149,7 @@
     "releaseBranch": "main",
     "protection": {
       "requiredChecks": "auto",
+    "squashMessage": "pr",
       "default": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false, "enforceAdmins": true },
       "branches": {}
     }

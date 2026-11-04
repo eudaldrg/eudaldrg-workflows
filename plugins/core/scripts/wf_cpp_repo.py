@@ -730,6 +730,40 @@ def policy_diff(current: dict | None, proposed: dict) -> list[str]:
             for key, value in proposed.items() if current.get(key) != value]
 
 
+# Repo-wide merge settings. `squashMessage: "pr"` makes a squash merge default to the PR's title
+# and body, so the branch's commit messages and their trailers (Plan-Id, Task-Id) never reach the
+# protected branch. "commits" is the forge's own default; null leaves the setting alone.
+GITHUB_SQUASH = {
+    "pr": {"squash_merge_commit_title": "PR_TITLE", "squash_merge_commit_message": "PR_BODY"},
+    "commits": {"squash_merge_commit_title": "COMMIT_OR_PR_TITLE",
+                "squash_merge_commit_message": "COMMIT_MESSAGES"},
+}
+
+
+def squash_policy(settings: Settings) -> str | None:
+    """Validated by wf_config: "pr", "commits" or None."""
+    return settings.git["protection"].get("squashMessage")
+
+
+def github_repo_state(slug: str, settings: Settings) -> dict:
+    """The repo's squash-merge message settings against the policy."""
+    state: dict = {"branch": "(repo merge settings)"}
+    policy = squash_policy(settings)
+    if policy is None:
+        state["diff"] = []
+        state["proposed"] = {}
+        return state
+    code, out, err = gh_api([f"repos/{slug}"])
+    if code != 0:
+        state["error"] = err.strip()
+        return state
+    live = json.loads(out)
+    state["proposed"] = GITHUB_SQUASH[policy]
+    state["diff"] = [f"{key}: {json.dumps(live.get(key))} -> {json.dumps(value)}"
+                     for key, value in state["proposed"].items() if live.get(key) != value]
+    return state
+
+
 def checklist(settings: Settings, forge: dict) -> str:
     lines = [f"No forge adapter here ({forge['reason']}). Set these by hand in the forge's settings:"]
     for branch in protected_branches(settings):
@@ -742,6 +776,11 @@ def checklist(settings: Settings, forge: dict) -> str:
         lines.append(f"    deletion allowed: {policy['allowDeletion']}")
         lines.append(f"    linear history required: {policy['linearHistory']}")
         lines.append(f"    rules apply to admins too: {policy['enforceAdmins']}")
+    squash = squash_policy(settings)
+    if squash == "pr":
+        lines.append("- repo: a squash merge's default message is the PR title and description")
+    elif squash == "commits":
+        lines.append("- repo: a squash merge's default message is the branch's commit messages")
     return "\n".join(lines)
 
 
@@ -788,12 +827,21 @@ def cmd_protect(args: argparse.Namespace) -> int:
         print(checklist(settings, {**forge, "reason": "gh unavailable"}))
         return ERROR
 
+    if args.apply and args.repo:
+        if args.branch:
+            print("error: --apply writes one target at a time; pass --repo or one --branch",
+                  file=sys.stderr)
+            return ERROR
+        return apply_repo_settings(slug, settings)
+
     branches = args.branch or protected_branches(settings)
     if args.apply and len(branches) != 1:
         print("error: --apply writes one branch at a time; pass exactly one --branch", file=sys.stderr)
         return ERROR
 
     states = [github_branch_state(slug, branch, settings) for branch in branches]
+    if not args.apply and (args.repo or not args.branch):
+        states.append(github_repo_state(slug, settings))
     if args.json and not args.apply:
         print(json.dumps({"forge": forge, "branches": states}, indent=2))
         return OK
@@ -804,7 +852,7 @@ def cmd_protect(args: argparse.Namespace) -> int:
             continue
         for line in state["diff"] or ["(already matches the policy)"]:
             print(f"   {line}")
-        if state["neverRan"]:
+        if state.get("neverRan"):
             print(f"   warning: required checks never reported on {state['branch']}: "
                   f"{', '.join(state['neverRan'])}. Every PR into it would wait on them; run CI "
                   "on it first.")
@@ -830,6 +878,30 @@ def cmd_protect(args: argparse.Namespace) -> int:
             print(f"   {line}", file=sys.stderr)
         return ERROR
     print(f"applied protection to {state['branch']}")
+    return OK
+
+
+def apply_repo_settings(slug: str, settings: Settings) -> int:
+    state = github_repo_state(slug, settings)
+    print(f"== {slug} {state['branch']}")
+    if "error" in state:
+        print(f"   error: {state['error']}")
+        return ERROR
+    for line in state["diff"] or ["(already matches the policy)"]:
+        print(f"   {line}")
+    if not state["diff"]:
+        return OK
+    code, _, err = gh_api(["-X", "PATCH", f"repos/{slug}", "--input", "-"], state["proposed"])
+    if code != 0:
+        print(f"error: repo settings write failed: {err.strip()}", file=sys.stderr)
+        return ERROR
+    after = github_repo_state(slug, settings)
+    if after.get("diff") or "error" in after:
+        print("error: repo settings written but read back differently:", file=sys.stderr)
+        for line in after.get("diff") or [after.get("error", "")]:
+            print(f"   {line}", file=sys.stderr)
+        return ERROR
+    print("applied repo merge settings")
     return OK
 
 
@@ -969,7 +1041,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     protect = sub.add_parser("protect", help="show (default) or apply branch protection on the forge")
     protect.add_argument("--branch", action="append", help="branch to show or apply; repeatable")
-    protect.add_argument("--apply", action="store_true", help="write one --branch's protection")
+    protect.add_argument("--repo", action="store_true",
+                         help="show or apply the repo-wide squash-merge message settings")
+    protect.add_argument("--apply", action="store_true",
+                         help="write one --branch's protection, or with --repo the repo settings")
     protect.add_argument("--json", action="store_true")
     protect.set_defaults(func=cmd_protect)
     return parser

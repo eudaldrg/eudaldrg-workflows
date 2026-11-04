@@ -511,6 +511,10 @@ def validate(merged: dict, loaded: list[tuple[str, dict]], strict: bool) -> list
     ):
         problems.append("git.protection.requiredChecks: expected \"auto\" or a list of strings")
 
+    squash, found = lookup(merged, "git.protection.squashMessage")
+    if found and squash not in (None, "pr", "commits"):
+        problems.append("git.protection.squashMessage: expected \"pr\", \"commits\" or null")
+
     publish, found = lookup(merged, "reports.publishCmd")
     if found and publish is not None and not (isinstance(publish, str) and "{file}" in publish):
         problems.append("reports.publishCmd: expected null or a command string containing {file}")

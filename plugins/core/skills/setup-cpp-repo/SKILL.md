@@ -134,17 +134,23 @@ On GitHub, this changes the live repo, outside the working tree. **Confirm every
 4. For **each** branch, show its diff and ask. On a yes, `protect --apply --branch <b>`; it writes
    that one branch and reads it back. A yes for `main` is not a yes for `dev`, and a yes in an earlier
    session is not a yes now.
+5. The same `protect` run shows the repo-wide merge settings as a last section. Ask separately; on
+   a yes, `protect --apply --repo` writes them and reads them back.
 
 The defaults, and why: PR required; required checks = every CI check that reported on the branch;
 no force push; no deletion; **0 required approvals**, because the owner opens PRs from their own
 account and GitHub does not let an author approve; **no linear history on main**, because a release
-is a merge commit; rules apply to admins too.
+is a merge commit; rules apply to admins too. A squash merge defaults to the **PR title and
+description** (`squashMessage: "pr"`): the PR description is written as the final commit message,
+and the branch's commit messages, with their `Plan-Id` / `Task-Id` trailers and their intermediate
+states, stay off the integration branch.
 
 ## Hard rules
 
 - Never overwrite a scaffolded file, and never regenerate a hand-edited generated file without the
   user seeing the diff and agreeing to `--force`.
-- Never write forge settings without a per-branch confirmation in this session.
+- Never write forge settings without a per-branch confirmation in this session; the repo-wide
+  merge settings are one more target with their own confirmation.
 - Never commit, push, merge or tag. Setup ends with a working tree the user reviews.
 - Never weaken a check to make the dry run pass; fix the template or report it.
 - Nothing project-specific goes into this plugin's templates; per-repo choices live in that repo's
