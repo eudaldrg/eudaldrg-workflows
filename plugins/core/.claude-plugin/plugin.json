@@ -2,7 +2,7 @@
   "name": "core",
   "displayName": "Workflows Core",
   "description": "Core agents, skills, and commands for cross-project LLM workflow conventions.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "author": {
     "name": "eudald",
     "email": "eudald.rg@gmail.com"
