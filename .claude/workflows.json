@@ -1,0 +1,9 @@
+{
+  "git": {
+    "integrationBranch": "next_release",
+    "protectedBranches+": ["next_release"],
+    "protection": {
+      "requiredChecks": []
+    }
+  }
+}

@@ -149,8 +149,11 @@
     "releaseBranch": "main",
     "protection": {
       "requiredChecks": "auto",
-    "squashMessage": "pr",
-      "default": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false, "enforceAdmins": true },
+      "squashMessage": "pr",
+      "mergeMessage": "pr",
+      "default": { "requirePR": true, "approvals": 0, "allowForcePush": false, "allowDeletion": false, "linearHistory": false, "enforceAdmins": true, "mergeMethods": ["merge", "rebase", "squash"] },
+      "release": { "mergeMethods": ["merge"], "linearHistory": false },
+      "integration": { "mergeMethods": ["rebase", "squash"], "linearHistory": true },
       "branches": {}
     }
   },
