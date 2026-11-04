@@ -9,9 +9,9 @@ Two kinds of output, on purpose (references/cpp-repo-setup.md):
   version, config hash, body hash; no timestamp) for drift detection.
 
 The CI file is forge-specific: scaffolded once (a reference workflow the repo then owns and edits)
-and checked semantically, never for byte drift. Branch protection goes through an adapter too. The
-forge comes from the origin URL or `git.forge`; only GitHub has an adapter, any other forge gets no
-CI file and a printed checklist.
+and checked semantically, never for byte drift. The forge comes from the origin URL or `git.forge`;
+only GitHub has an adapter, any other forge gets no CI file and a printed checklist. Branch
+protection is not C++-specific and lives in wf_protect.py; `protect` here is the same command.
 """
 
 from __future__ import annotations
@@ -21,13 +21,13 @@ import copy
 import difflib
 import json
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import wf_config  # noqa: E402
+import wf_protect  # noqa: E402
 from wf_lint import canonical, sha, split_header, stamps  # noqa: E402
 
 OK = 0
@@ -106,40 +106,12 @@ def msvc_version(vs_version: str) -> int:
 # --------------------------------------------------------------------------- forge
 
 
-def origin_url(root: Path) -> str | None:
-    try:
-        out = subprocess.run(["git", "-C", str(root), "remote", "get-url", "origin"],
-                             capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if out.returncode != 0:
-        return None
-    return out.stdout.strip() or None
-
-
-def parse_remote(url: str | None) -> tuple[str | None, str | None]:
-    """(host, owner/repo) from an ssh or https remote URL."""
-    if not url:
-        return None, None
-    match = re.match(r"^(?:[a-z+]+://)?(?:[^@/]+@)?([^:/]+)(?::\d+)?[:/](.+?)(?:\.git)?/?$", url)
-    if not match:
-        return None, None
-    return match.group(1).lower(), match.group(2)
+parse_remote = wf_protect.parse_remote
 
 
 def detect_forge(settings: Settings, url: str | None = None) -> dict:
     """{'forge': 'github'|'none'|'unsupported', 'host', 'slug', 'reason'}."""
-    configured = settings.git.get("forge", "auto")
-    host, slug = parse_remote(url if url is not None else origin_url(settings.root))
-    if configured == "none":
-        return {"forge": "none", "host": host, "slug": slug, "reason": "git.forge is none"}
-    if configured == "github" or (host and (host == "github.com" or host.endswith(".github.com"))):
-        return {"forge": "github", "host": host, "slug": slug, "reason": "origin is GitHub"
-                if configured == "auto" else "git.forge is github"}
-    if host:
-        return {"forge": "unsupported", "host": host, "slug": slug,
-                "reason": f"no adapter for {host}; only GitHub has one"}
-    return {"forge": "none", "host": None, "slug": None, "reason": "no origin remote"}
+    return wf_protect.detect_forge(settings.git, settings.root, url)
 
 
 # --------------------------------------------------------------------------- scaffold
@@ -651,260 +623,6 @@ def describe(kinds: dict[str, str]) -> str:
     return "; ".join(kinds.values()) or "clean"
 
 
-# --------------------------------------------------------------------------- protection
-# The policy (git.protection) is forge-neutral; an adapter turns it into one forge's API calls.
-# Only GitHub has one. Every write goes through `protect --apply --branch B`, one branch at a time,
-# so the skill can show the diff and ask before each.
-
-def gh_api(args: list[str], payload: dict | None = None) -> tuple[int, str, str]:
-    """Run `gh api`. Tests replace this function."""
-    cmd = ["gh", "api", *args]
-    try:
-        out = subprocess.run(cmd, input=json.dumps(payload) if payload is not None else None,
-                             capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.SubprocessError) as exc:
-        return 127, "", str(exc)
-    return out.returncode, out.stdout, out.stderr
-
-
-def policy_for(settings: Settings, branch: str, ran: list[str] | None = None) -> dict:
-    """`requiredChecks: "auto"` means the CI checks that actually reported on the branch (`ran`):
-    the repo owns its CI file, so its job names are only known from a run."""
-    protection = settings.git["protection"]
-    policy = {**protection["default"], **(protection["branches"].get(branch) or {})}
-    required = protection["requiredChecks"]
-    policy["requiredChecks"] = sorted(ran or []) if required == "auto" else sorted(required)
-    return policy
-
-
-def protected_branches(settings: Settings) -> list[str]:
-    """The release and integration branches, plus any other branch with its own policy entry."""
-    branches = [settings.release, settings.integration, *settings.git["protection"]["branches"]]
-    return list(dict.fromkeys(branches))
-
-
-def github_payload(policy: dict) -> dict:
-    """PUT /repos/{o}/{r}/branches/{b}/protection. All four top-level keys are mandatory."""
-    return {
-        "required_status_checks": (
-            {"strict": False, "contexts": policy["requiredChecks"]} if policy["requiredChecks"] else None
-        ),
-        "enforce_admins": bool(policy["enforceAdmins"]),
-        "required_pull_request_reviews": (
-            {"required_approving_review_count": int(policy["approvals"]),
-             "dismiss_stale_reviews": False, "require_code_owner_reviews": False}
-            if policy["requirePR"] else None
-        ),
-        "restrictions": None,
-        "allow_force_pushes": bool(policy["allowForcePush"]),
-        "allow_deletions": bool(policy["allowDeletion"]),
-        "required_linear_history": bool(policy["linearHistory"]),
-    }
-
-
-def github_current(response: dict | None) -> dict | None:
-    """GET .../protection response -> the policy shape, or None when the branch is unprotected."""
-    if response is None:
-        return None
-    checks = response.get("required_status_checks") or {}
-    reviews = response.get("required_pull_request_reviews")
-
-    def enabled(key: str) -> bool:
-        return bool((response.get(key) or {}).get("enabled"))
-
-    return {
-        "requirePR": reviews is not None,
-        "approvals": int((reviews or {}).get("required_approving_review_count", 0)),
-        "allowForcePush": enabled("allow_force_pushes"),
-        "allowDeletion": enabled("allow_deletions"),
-        "linearHistory": enabled("required_linear_history"),
-        "enforceAdmins": enabled("enforce_admins"),
-        "requiredChecks": sorted(checks.get("contexts") or []),
-    }
-
-
-def policy_diff(current: dict | None, proposed: dict) -> list[str]:
-    if current is None:
-        return [f"{key}: (unprotected) -> {json.dumps(value)}" for key, value in proposed.items()]
-    return [f"{key}: {json.dumps(current.get(key))} -> {json.dumps(value)}"
-            for key, value in proposed.items() if current.get(key) != value]
-
-
-# Repo-wide merge settings. `squashMessage: "pr"` makes a squash merge default to the PR's title
-# and body, so the branch's commit messages and their trailers (Plan-Id, Task-Id) never reach the
-# protected branch. "commits" is the forge's own default; null leaves the setting alone.
-GITHUB_SQUASH = {
-    "pr": {"squash_merge_commit_title": "PR_TITLE", "squash_merge_commit_message": "PR_BODY"},
-    "commits": {"squash_merge_commit_title": "COMMIT_OR_PR_TITLE",
-                "squash_merge_commit_message": "COMMIT_MESSAGES"},
-}
-
-
-def squash_policy(settings: Settings) -> str | None:
-    """Validated by wf_config: "pr", "commits" or None."""
-    return settings.git["protection"].get("squashMessage")
-
-
-def github_repo_state(slug: str, settings: Settings) -> dict:
-    """The repo's squash-merge message settings against the policy."""
-    state: dict = {"branch": "(repo merge settings)"}
-    policy = squash_policy(settings)
-    if policy is None:
-        state["diff"] = []
-        state["proposed"] = {}
-        return state
-    code, out, err = gh_api([f"repos/{slug}"])
-    if code != 0:
-        state["error"] = err.strip()
-        return state
-    live = json.loads(out)
-    state["proposed"] = GITHUB_SQUASH[policy]
-    state["diff"] = [f"{key}: {json.dumps(live.get(key))} -> {json.dumps(value)}"
-                     for key, value in state["proposed"].items() if live.get(key) != value]
-    return state
-
-
-def checklist(settings: Settings, forge: dict) -> str:
-    lines = [f"No forge adapter here ({forge['reason']}). Set these by hand in the forge's settings:"]
-    for branch in protected_branches(settings):
-        policy = policy_for(settings, branch)
-        lines.append(f"- {branch}:")
-        lines.append(f"    merge only through a pull/merge request: {policy['requirePR']}")
-        lines.append(f"    required approvals: {policy['approvals']}")
-        lines.append(f"    required CI checks: {', '.join(policy['requiredChecks']) or 'every CI job, by the names it reports'}")
-        lines.append(f"    force push allowed: {policy['allowForcePush']}")
-        lines.append(f"    deletion allowed: {policy['allowDeletion']}")
-        lines.append(f"    linear history required: {policy['linearHistory']}")
-        lines.append(f"    rules apply to admins too: {policy['enforceAdmins']}")
-    squash = squash_policy(settings)
-    if squash == "pr":
-        lines.append("- repo: a squash merge's default message is the PR title and description")
-    elif squash == "commits":
-        lines.append("- repo: a squash merge's default message is the branch's commit messages")
-    return "\n".join(lines)
-
-
-def github_branch_state(slug: str, branch: str, settings: Settings) -> dict:
-    state: dict = {"branch": branch}
-    code, _, err = gh_api([f"repos/{slug}/branches/{branch}"])
-    if code != 0:
-        state["error"] = (f"branch {branch} not found on {slug}; push it first"
-                          if "404" in err or "Not Found" in err else err.strip())
-        return state
-    code, out, _ = gh_api([f"repos/{slug}/commits/{branch}/check-runs", "--jq",
-                           '[.check_runs[] | select(.app.slug == "github-actions") | .name]'])
-    ran = sorted(set(json.loads(out))) if code == 0 and out.strip() else []
-    state["proposed"] = policy_for(settings, branch, ran)
-    if settings.git["protection"]["requiredChecks"] == "auto" and not ran:
-        state["error"] = (f"no CI checks have reported on {branch}; run CI on it first, so the "
-                          "required checks are the job names the repo's CI really uses")
-        return state
-    code, out, err = gh_api([f"repos/{slug}/branches/{branch}/protection"])
-    if code == 0:
-        state["current"] = github_current(json.loads(out))
-    elif "404" in err or "not protected" in err.lower():
-        state["current"] = None
-    else:
-        state["error"] = err.strip()
-        return state
-    state["diff"] = policy_diff(state["current"], state["proposed"])
-    # An explicitly required check that never reported on this branch blocks every PR into it.
-    state["neverRan"] = [name for name in state["proposed"]["requiredChecks"] if name not in ran]
-    return state
-
-
-def cmd_protect(args: argparse.Namespace) -> int:
-    settings = load(args.project)
-    forge = detect_forge(settings)
-    if forge["forge"] != "github":
-        print(checklist(settings, forge))
-        return OK
-    slug = forge["slug"]
-    code, _, err = gh_api(["user", "--jq", ".login"])
-    if code != 0:
-        print(f"gh is not usable ({err.strip() or 'not installed'}); run `gh auth login`, or set "
-              "protection by hand:", file=sys.stderr)
-        print(checklist(settings, {**forge, "reason": "gh unavailable"}))
-        return ERROR
-
-    if args.apply and args.repo:
-        if args.branch:
-            print("error: --apply writes one target at a time; pass --repo or one --branch",
-                  file=sys.stderr)
-            return ERROR
-        return apply_repo_settings(slug, settings)
-
-    branches = args.branch or protected_branches(settings)
-    if args.apply and len(branches) != 1:
-        print("error: --apply writes one branch at a time; pass exactly one --branch", file=sys.stderr)
-        return ERROR
-
-    states = [github_branch_state(slug, branch, settings) for branch in branches]
-    if not args.apply and (args.repo or not args.branch):
-        states.append(github_repo_state(slug, settings))
-    if args.json and not args.apply:
-        print(json.dumps({"forge": forge, "branches": states}, indent=2))
-        return OK
-    for state in states:
-        print(f"== {slug} {state['branch']}")
-        if "error" in state:
-            print(f"   error: {state['error']}")
-            continue
-        for line in state["diff"] or ["(already matches the policy)"]:
-            print(f"   {line}")
-        if state.get("neverRan"):
-            print(f"   warning: required checks never reported on {state['branch']}: "
-                  f"{', '.join(state['neverRan'])}. Every PR into it would wait on them; run CI "
-                  "on it first.")
-    if not args.apply:
-        return OK
-
-    state = states[0]
-    if "error" in state:
-        return ERROR
-    if not state["diff"]:
-        return OK
-    payload = github_payload(state["proposed"])
-    code, _, err = gh_api(["-X", "PUT", f"repos/{slug}/branches/{state['branch']}/protection",
-                           "--input", "-"], payload)
-    if code != 0:
-        print(f"error: protection write failed: {err.strip()}", file=sys.stderr)
-        return ERROR
-    code, out, err = gh_api([f"repos/{slug}/branches/{state['branch']}/protection"])
-    after = policy_diff(github_current(json.loads(out)) if code == 0 else None, state["proposed"])
-    if after:
-        print("error: protection written but read back differently:", file=sys.stderr)
-        for line in after:
-            print(f"   {line}", file=sys.stderr)
-        return ERROR
-    print(f"applied protection to {state['branch']}")
-    return OK
-
-
-def apply_repo_settings(slug: str, settings: Settings) -> int:
-    state = github_repo_state(slug, settings)
-    print(f"== {slug} {state['branch']}")
-    if "error" in state:
-        print(f"   error: {state['error']}")
-        return ERROR
-    for line in state["diff"] or ["(already matches the policy)"]:
-        print(f"   {line}")
-    if not state["diff"]:
-        return OK
-    code, _, err = gh_api(["-X", "PATCH", f"repos/{slug}", "--input", "-"], state["proposed"])
-    if code != 0:
-        print(f"error: repo settings write failed: {err.strip()}", file=sys.stderr)
-        return ERROR
-    after = github_repo_state(slug, settings)
-    if after.get("diff") or "error" in after:
-        print("error: repo settings written but read back differently:", file=sys.stderr)
-        for line in after.get("diff") or [after.get("error", "")]:
-            print(f"   {line}", file=sys.stderr)
-        return ERROR
-    print("applied repo merge settings")
-    return OK
-
-
 # --------------------------------------------------------------------------- commands
 
 
@@ -1039,14 +757,9 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--json", action="store_true")
     check.set_defaults(func=cmd_check)
 
-    protect = sub.add_parser("protect", help="show (default) or apply branch protection on the forge")
-    protect.add_argument("--branch", action="append", help="branch to show or apply; repeatable")
-    protect.add_argument("--repo", action="store_true",
-                         help="show or apply the repo-wide squash-merge message settings")
-    protect.add_argument("--apply", action="store_true",
-                         help="write one --branch's protection, or with --repo the repo settings")
-    protect.add_argument("--json", action="store_true")
-    protect.set_defaults(func=cmd_protect)
+    protect = sub.add_parser("protect", help="show (default) or apply branch protection on the "
+                             "forge; same as wf_protect.py protect")
+    wf_protect.add_protect_arguments(protect)
     return parser
 
 

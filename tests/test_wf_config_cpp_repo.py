@@ -29,6 +29,21 @@ class CppRepoConfigTest(unittest.TestCase):
         self.assertEqual(problems({"git": {"protection": {"requiredChecks": ["lint"]}}}), [])
         self.assertTrue(problems({"git": {"protection": {"requiredChecks": "all"}}}))
 
+    def test_branch_model_defaults(self):
+        protection = load_defaults()["git"]["protection"]
+        self.assertEqual(protection["release"]["mergeMethods"], ["merge"])
+        self.assertFalse(protection["release"]["linearHistory"])
+        self.assertEqual(protection["integration"]["mergeMethods"], ["rebase", "squash"])
+        self.assertTrue(protection["integration"]["linearHistory"])
+        self.assertEqual(protection["mergeMessage"], "pr")
+
+    def test_merge_settings_validated(self):
+        self.assertEqual(problems({"git": {"protection": {"mergeMessage": "default"}}}), [])
+        self.assertTrue(problems({"git": {"protection": {"mergeMessage": "commits"}}}))
+        bad = {"git": {"protection": {"branches": {"main": {"mergeMethods": ["ff"]}}}}}
+        self.assertTrue(any("branches.main.mergeMethods" in p for p in problems(bad)))
+        self.assertTrue(problems({"git": {"protection": {"release": {"mergeMethods": []}}}}))
+
     def test_matrix_cells_validated(self):
         bad = {"cpp": {"repo": {"ci": {"matrix": [{"os": "ubuntu-24.04", "compiler": "gcc"}]}}}}
         self.assertTrue(any("need a 'version'" in p for p in problems(bad)))

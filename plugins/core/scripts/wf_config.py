@@ -463,6 +463,8 @@ TYPES = {
     "git.integrationBranch": str,
     "git.releaseBranch": str,
     "git.protection.default": dict,
+    "git.protection.release": dict,
+    "git.protection.integration": dict,
     "git.protection.branches": dict,
     "statusLine.contextWarnPercent": int,
     "statusLine.contextCritPercent": int,
@@ -514,6 +516,25 @@ def validate(merged: dict, loaded: list[tuple[str, dict]], strict: bool) -> list
     squash, found = lookup(merged, "git.protection.squashMessage")
     if found and squash not in (None, "pr", "commits"):
         problems.append("git.protection.squashMessage: expected \"pr\", \"commits\" or null")
+
+    merge_message, found = lookup(merged, "git.protection.mergeMessage")
+    if found and merge_message not in (None, "pr", "default"):
+        problems.append("git.protection.mergeMessage: expected \"pr\", \"default\" or null")
+
+    protection, _ = lookup(merged, "git.protection")
+    if isinstance(protection, dict):
+        layers = [("default", protection.get("default")), ("release", protection.get("release")),
+                  ("integration", protection.get("integration"))]
+        layers += [(f"branches.{name}", value)
+                   for name, value in (protection.get("branches") or {}).items()]
+        for name, layer in layers:
+            methods = layer.get("mergeMethods") if isinstance(layer, dict) else None
+            if methods is not None and not (
+                isinstance(methods, list) and methods
+                and all(item in ("merge", "rebase", "squash") for item in methods)
+            ):
+                problems.append(f"git.protection.{name}.mergeMethods: expected a non-empty list of "
+                                "\"merge\", \"rebase\", \"squash\"")
 
     publish, found = lookup(merged, "reports.publishCmd")
     if found and publish is not None and not (isinstance(publish, str) and "{file}" in publish):
