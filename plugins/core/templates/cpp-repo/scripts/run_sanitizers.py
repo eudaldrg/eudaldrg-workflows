@@ -8,7 +8,7 @@ add_project_test() target, so no test binary can be left stale or unbuilt.
     python scripts/run_sanitizers.py --variant asan-ubsan --variant tsan
 
 The variants come from the generated .pre-commit-config.yaml (cpp.repo.checks.sanitizers in
-.claude/workflows.json), so this script needs no config of its own and runs the same in CI.
+.config/workflows.json), so this script needs no config of its own and runs the same in CI.
 On Windows (MSVC) only AddressSanitizer exists: asan-ubsan runs ASan alone and tsan is skipped.
 
 Scaffolded by the setup-cpp-repo skill; this repo owns it. docs/tasks/testing.md has the why.

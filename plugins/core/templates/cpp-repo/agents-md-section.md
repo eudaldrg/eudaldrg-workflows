@@ -5,7 +5,7 @@ bypass a hook (`--no-verify`) and never weaken a check, a lint rule or a test to
 pass. Adding a check needs no permission; removing or loosening one needs the owner. Silence a
 warning only at the line that triggers it (`// NOLINT(<check>)`), with a comment saying why, never
 file-wide or project-wide. When a style preference comes up, tighten `.clang-format` / `.clang-tidy`
-(through `.claude/workflows.json` and `/core:sync-lint-rules`) rather than writing prose style docs.
+(through `.config/workflows.json` and `/core:sync-lint-rules`) rather than writing prose style docs.
 
 `docs/tasks/testing.md` lists what runs at commit, at push and in CI. Once per clone:
 
@@ -14,7 +14,7 @@ cmake --preset debug
 pre-commit install && pre-commit install --hook-type pre-push
 ```
 
-`.pre-commit-config.yaml` is generated from `.claude/workflows.json` by `/core:setup-cpp-repo`;
+`.pre-commit-config.yaml` is generated from `.config/workflows.json` by `/core:setup-cpp-repo`;
 edit the config and regenerate, never the file. The CI workflow is this repo's own file: it must keep
 running both hook stages, on Linux and Windows, with compilers at or above the floor.
 

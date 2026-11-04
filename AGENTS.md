@@ -83,7 +83,7 @@ A plugin *installed* from the marketplace is a cache and does not track source e
 `/plugin marketplace update`. Use `--plugin-dir` while iterating.
 
 Branches follow `plugins/core/references/branch-model.md`, with `next_release` as the integration
-branch (`.claude/workflows.json`). The marketplace installs from `main`, so `main` is what users
+branch (`.config/workflows.json`). The marketplace installs from `main`, so `main` is what users
 get: work lands on `next_release` through squash or rebase PRs, the bump commit goes there through a
 PR too, and a release is the `next_release` → `main` PR merged as a merge commit, then tagged
 `vX.Y.Z` on `main`. Both branches are protected; nothing is pushed to them directly.
@@ -91,7 +91,7 @@ PR too, and a release is the `next_release` → `main` PR merged as a merge comm
 ### 3. Configuration is layered, and lives in files
 
 Three layers, deep-merged, later wins: plugin defaults → `~/.claude/workflows.json` →
-`<repo>/.claude/workflows.json`. Read it with `scripts/wf_config.py`; never hand-parse it.
+`<repo>/.config/workflows.json`. Read it with `scripts/wf_config.py`; never hand-parse it.
 Project config is committed, so it is reviewable and works in CI where no plugin is installed.
 Plugin `userConfig` is deliberately unused — it is per-installation scope and cannot express
 per-project settings.

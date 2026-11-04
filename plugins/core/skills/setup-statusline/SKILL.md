@@ -45,7 +45,7 @@ repo, model without an effort parameter, session too short for a burn rate). Thr
 color-coded context percentage and cost live in the layered config under `statusLine.*` — see
 `${CLAUDE_PLUGIN_ROOT}/defaults/workflows.defaults.json` for the defaults and
 [[wf_config]] docs for how to override them per-machine (`~/.claude/workflows.json`) or per-project
-(`.claude/workflows.json`).
+(`.config/workflows.json`).
 
 ## Procedure
 

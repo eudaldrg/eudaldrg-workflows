@@ -5,7 +5,8 @@ Three layers, deep-merged, later wins:
 
     plugin defaults  ${CLAUDE_PLUGIN_ROOT}/defaults/workflows.defaults.json
     home             ~/.claude/workflows.json
-    project          <git-toplevel>/.claude/workflows.json
+    project          <git-toplevel>/.config/workflows.json
+                     (legacy <git-toplevel>/.claude/workflows.json is still read, with a warning)
 
 Stdlib only, so this runs in CI and on machines where the plugin is not installed.
 Env overrides for testing: WF_PLUGIN_ROOT, WF_HOME_CONFIG, WF_PROJECT_DIR.
@@ -80,11 +81,30 @@ def project_root(explicit: str | None = None) -> Path:
     return Path(start).resolve()
 
 
+# The project layer lives at a tool-neutral path: what it configures is not Claude-specific.
+PROJECT_CONFIG = Path(".config") / "workflows.json"
+LEGACY_PROJECT_CONFIG = Path(".claude") / "workflows.json"
+_warned_legacy: set[Path] = set()
+
+
+def project_config_path(root: Path) -> Path:
+    """The project layer for `root`: `.config/workflows.json`, or the legacy
+    `.claude/workflows.json` when only that one exists (warned once per root)."""
+    current, legacy = root / PROJECT_CONFIG, root / LEGACY_PROJECT_CONFIG
+    if current.is_file() or not legacy.is_file():
+        return current
+    if root not in _warned_legacy:
+        _warned_legacy.add(root)
+        print(f"warning: {legacy} is the legacy location; move it with "
+              f"`git mv {LEGACY_PROJECT_CONFIG} {PROJECT_CONFIG}`", file=sys.stderr)
+    return legacy
+
+
 def layer_paths(explicit_project: str | None = None) -> dict[str, Path]:
     return {
         "plugin": plugin_root() / "defaults" / "workflows.defaults.json",
         "home": home_config_path(),
-        "project": project_root(explicit_project) / ".claude" / "workflows.json",
+        "project": project_config_path(project_root(explicit_project)),
     }
 
 

@@ -52,7 +52,7 @@ be an add or a remove — so show the diff and ask rather than guessing.
 - **Shared, applies everywhere:** `${CLAUDE_PLUGIN_ROOT}/rules/cpp/base.clang-*.json`. Bump
   `rules/cpp/VERSION` and add a `CHANGELOG.md` entry in the same change, so projects that fall
   behind can see what they are missing.
-- **One project only:** that project's `.claude/workflows.json` under `cpp`. Never edit the
+- **One project only:** that project's `.config/workflows.json` under `cpp`. Never edit the
   generated `.clang-format` / `.clang-tidy` directly.
 
 Overrides support `clangFormat.overrides` (flat keys, plus dotted keys like

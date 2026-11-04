@@ -24,12 +24,12 @@ These are the price of the approach, not bugs in it.
 3. **The file stops reading as "Google plus eight tweaks."** Because nested structs are emitted
    wholesale, a reviewer loses the at-a-glance sense of how far the project has drifted from stock.
    The `--dump-config` before/after comparison in the sync report partly compensates.
-4. **Two sources of truth inside the repo** — `.claude/workflows.json` and the generated files. This
+4. **Two sources of truth inside the repo** — `.config/workflows.json` and the generated files. This
    is the sharpest edge. Someone who edits `.clang-format` directly gets overwritten at the next
    sync. Mitigated three ways, all mandatory: the loud generated-file header; drift detection that
    offers to *fold a hand-edit back* into the overrides rather than discarding it; and keeping any
    project instruction that says "tighten `.clang-format`" updated to say "edit
-   `.claude/workflows.json`, then sync" — otherwise the project's own docs will instruct future
+   `.config/workflows.json`, then sync" — otherwise the project's own docs will instruct future
    agents to do the wrong thing.
 
 ## Rejected alternatives

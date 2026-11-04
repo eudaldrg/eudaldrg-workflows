@@ -1,5 +1,5 @@
 {
-  "_doc": "Shared clang-format baseline for all C++ projects. Project-specific deviations belong in that project's .claude/workflows.json under cpp.clangFormat.overrides, never in the generated .clang-format. Nested clang-format structs are written as dotted keys here (e.g. 'BraceWrapping.AfterFunction') and exploded into nested YAML on emit.",
+  "_doc": "Shared clang-format baseline for all C++ projects. Project-specific deviations belong in that project's .config/workflows.json under cpp.clangFormat.overrides, never in the generated .clang-format. Nested clang-format structs are written as dotted keys here (e.g. 'BraceWrapping.AfterFunction') and exploded into nested YAML on emit.",
 
   "BasedOnStyle": "Google",
   "ColumnLimit": 100,

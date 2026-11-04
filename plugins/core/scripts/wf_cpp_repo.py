@@ -206,13 +206,14 @@ def scaffold_actions(settings: Settings, name: str | None) -> list[dict]:
         actions.append({"path": ".gitignore", "action": "append" if lines else "write",
                         "content": "\n".join([*lines, "build/"]) + "\n"})
 
-    existing = wf_config.read_layer(wf_config.layer_paths(str(settings.root))["project"])
+    config_path = wf_config.layer_paths(str(settings.root))["project"]
+    existing = wf_config.read_layer(config_path)
     additions = project_config_additions(settings, existing)
     if additions:
         merged = copy.deepcopy(existing)
         for key, sub in additions.items():
             merged.setdefault(key, {}).update(sub)
-        actions.append({"path": ".claude/workflows.json",
+        actions.append({"path": config_path.relative_to(settings.root).as_posix(),
                         "action": "merge" if existing else "write",
                         "content": json.dumps(merged, indent=2) + "\n"})
     return actions
@@ -577,7 +578,7 @@ def header(settings: Settings, spec: dict) -> str:
     return "\n".join([
         "# " + "=" * 74,
         "#  GENERATED FILE - do not edit by hand.",
-        "#  Edit this project's .claude/workflows.json (cpp.repo, git), then run",
+        "#  Edit this project's .config/workflows.json (cpp.repo, git), then run",
         "#  /core:setup-cpp-repo (wf_cpp_repo.py generate --apply) to regenerate.",
         "# " + "=" * 74,
         f"# wf-template:         cpp-repo/{settings.template_version}",
@@ -673,7 +674,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
         kinds = drift(settings, rel, spec, old) if old else {}
         owned = [message for kind, message in kinds.items() if kind in USER_OWNED]
         if owned and not args.force:
-            print(f"refusing {rel}: {owned[0]}. Fold what it wants into .claude/workflows.json, "
+            print(f"refusing {rel}: {owned[0]}. Fold what it wants into .config/workflows.json, "
                   "or pass --force to replace it.", file=sys.stderr)
             print(unified(rel, old, new), end="")
             return DRIFT

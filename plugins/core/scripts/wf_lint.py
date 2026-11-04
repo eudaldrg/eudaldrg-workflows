@@ -3,7 +3,7 @@
 
 The clang tools can only inherit from parent directories, never from an arbitrary
 path, so shared rules are merged here and written into the project as generated,
-committed files. Overrides live in <project>/.claude/workflows.json under `cpp`.
+committed files. Overrides live in <project>/.config/workflows.json under `cpp`.
 """
 
 from __future__ import annotations
@@ -182,7 +182,7 @@ def header(version: str, base_hash: str, override_hash: str, body: str, sources:
         [
             "# " + "=" * 74,
             "#  GENERATED FILE - do not edit by hand.",
-            "#  Edit this project's .claude/workflows.json under `cpp`, then run",
+            "#  Edit this project's .config/workflows.json under `cpp`, then run",
             "#  the sync-lint-rules skill (/core:sync-lint-rules) to regenerate.",
             "# " + "=" * 74,
             f"# wf-rules:            {version}",
