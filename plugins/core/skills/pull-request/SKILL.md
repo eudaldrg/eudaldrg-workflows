@@ -79,6 +79,27 @@ gh pr create --base <base> --head <branch> --title "<title>" --body-file <file>
   re-check the merge method: a one-commit PR that gained review fixups now squashes.
 - Resolve the review threads the change addressed; leave the rest for the reviewer.
 
+## Mechanics and gotchas
+
+- **Push, open and merge need the owner's go-ahead** each time, unless the project config says
+  otherwise for plan runs (`git.askBeforePush`, `git.askBeforePR`).
+- **Check the PR's state before pushing more commits** (`gh pr view <branch> --json state,mergedAt`).
+  Commits pushed to a merged branch go nowhere; cut a new branch from the updated base.
+- **`gh pr edit` can fail silently**: some `gh` versions print a GraphQL "Projects (classic) is
+  being deprecated" error and leave the old title and body. Edit through the REST API, with the body
+  in a file, and read it back:
+
+  ```bash
+  gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f title="..." -F body=@body.md
+  gh api repos/<owner>/<repo>/pulls/<n> --jq .body | head
+  ```
+
+- **Review what a branch adds** against the merge-base and the remote ref, so commits that landed on
+  the base since the cut do not show as removals: `git diff --stat origin/<base>...HEAD`,
+  `git log --stat origin/<base>..HEAD`.
+- **A force push does not purge anything**: old commits stay reachable by SHA through the PR's refs.
+  A committed secret is rotated, and private content needs the forge's support to remove.
+
 ## Hard rules
 
 - Never merge, whatever the config or the plan text says.
