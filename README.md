@@ -50,6 +50,7 @@ python3 plugins/core/scripts/wf_config.py doctor
 | Skill | `simplify-design` | Reviews ADRs and design docs for rules that should be settings, or should not exist. |
 | Skill | `generate-plan` | Turns a piece of work into a plan file: prose context plus a machine-readable task graph. |
 | Skill | `implement-plan` | Executes a plan task by task, running checks and committing each task; resumable from git. |
+| Skill | `pull-request` | Opens or updates a PR: one topic, the right base, a description sized to the change, and a recommended merge method (rebase, squash or merge commit) from the branch's shape. |
 | Skill | `investigate` | Read-only investigation of a codebase question, returning a cited findings report. |
 | Skill | `retrieve-knowledge` | Finds the project docs relevant to the module or procedure about to be worked on. |
 | Skill | `update-knowledge` | Writes or refreshes project docs, organised by component and by activity. |

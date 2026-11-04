@@ -141,9 +141,9 @@ The defaults, and why: PR required; required checks = every CI check that report
 no force push; no deletion; **0 required approvals**, because the owner opens PRs from their own
 account and GitHub does not let an author approve; **no linear history on main**, because a release
 is a merge commit; rules apply to admins too. A squash merge defaults to the **PR title and
-description** (`squashMessage: "pr"`): the PR description is written as the final commit message,
-and the branch's commit messages, with their `Plan-Id` / `Task-Id` trailers and their intermediate
-states, stay off the integration branch.
+description** (`squashMessage: "pr"`), so when a PR squashes (`/core:pull-request` decides), the
+branch's commit messages, with their `Plan-Id` / `Task-Id` trailers and their intermediate states,
+stay off the integration branch.
 
 ## Hard rules
 

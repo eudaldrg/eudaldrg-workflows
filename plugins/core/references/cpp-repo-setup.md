@@ -141,7 +141,7 @@ stale test binary running.
 
 ## Branch model and protection defaults
 
-`feature/<slug>` → PR into the integration branch (`dev`), squash-merged by the owner; release =
+`feature/<slug>` → PR into the integration branch (`dev`), merged by the owner by the method the PR recommends (`/core:pull-request`); release =
 integration → release branch (`main`) as a merge commit, then tag `vX.Y.Z` there. Defaults for both
 protected branches: PR required, required checks = every CI check that reported on the branch
 (the repo owns its CI, so its job names are read from a run, not predicted), no force push, no

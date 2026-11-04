@@ -20,8 +20,8 @@ running both hook stages, on Linux and Windows, with compilers at or above the f
 
 ## Branches and pull requests
 
-`{{branch_prefix}}<slug>` → PR into `{{integration_branch}}`, squash-merged by the owner after
-review. A release is `{{integration_branch}}` → `{{release_branch}}` as a merge commit, then a
+`{{branch_prefix}}<slug>` → PR into `{{integration_branch}}`, merged by the owner after review by
+the method the PR recommends (`/core:pull-request`). A release is `{{integration_branch}}` → `{{release_branch}}` as a merge commit, then a
 `vX.Y.Z` tag on `{{release_branch}}`, only when the owner says so. Never merge your own PR.
 `docs/tasks/pull-requests.md` has the procedure and its gotchas.
 

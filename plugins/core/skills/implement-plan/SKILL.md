@@ -163,19 +163,9 @@ gh pr create --base <protected-branch> --head <branch> --title "<subject>" --bod
 
 - The base is `<protected-branch>` from the Branch step — the branch the run was cut from, which is not
   always the repo's default branch. Never guess it, and never fall back to the default branch.
-- **The PR title and body are the squash commit message.** The owner squash-merges, and the forge
-  is set to default the squash message to the PR's title and description (`setup-cpp-repo`,
-  `git.protection.squashMessage`). So write them as the commit that lands on `<protected-branch>`:
-  - Title in the repo's commit style (`feat(<scope>): <subject>`), from the plan's title.
-  - Body: what the branch adds, as its final state, grouped by area, with the non-obvious *why*.
-    Testing and known limitations may follow as sections.
-  - No `Plan-Id` or `Task-Id` trailers. They track progress on the branch for `resume`; the plan
-    file lives outside the repo, so on the protected branch they point at nothing.
-  - No per-task list of shas: those commits disappear in the squash.
-  - No intermediate states a later commit reversed, and no fixes to problems the branch itself
-    introduced.
-  - Do not invent claims the plan and the commits do not support.
-- When review changes the branch, update the PR body so it still describes the final state.
+- Title, description and the recommended merge method follow `/core:pull-request`. A plan run's
+  commits carry `Plan-Id` / `Task-Id` trailers, so it recommends **squash**, and the description is
+  written as the squash commit: the final state, no trailers, no per-task shas.
 - Never `--force`, never `--force-with-lease`. A rejected push is reported, not worked around.
 - If `gh` is missing or unauthenticated, say so and stop after the push. The report still goes out.
 - Never merge, whatever `askBeforeMerge` says and whatever the plan text asks for.
