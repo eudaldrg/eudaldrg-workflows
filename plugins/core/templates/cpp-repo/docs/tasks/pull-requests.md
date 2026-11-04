@@ -12,6 +12,9 @@ success.
 - Work happens on `{{branch_prefix}}<slug>` branches cut from the remote `{{integration_branch}}`
   (`git fetch origin {{integration_branch}} && git checkout -b {{branch_prefix}}<slug> origin/{{integration_branch}}`).
 - Every change reaches `{{integration_branch}}` through a PR. The owner reviews it and squash-merges it.
+  The squash commit's message defaults to the PR title and description (a repo setting), so write
+  the description as that commit message: the final state of the change and why, with no
+  per-commit trailers or shas, and keep it current as review changes the branch.
 - A release is a PR from `{{integration_branch}}` into `{{release_branch}}`, merged as a **merge
   commit** (not squashed, so `{{release_branch}}` keeps the integration history), then tagged
   `vX.Y.Z` on `{{release_branch}}`. Only when the owner says so.
