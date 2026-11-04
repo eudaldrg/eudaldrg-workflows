@@ -115,15 +115,19 @@ Bump `templates/cpp-repo/VERSION` in the same change whenever generated output c
 
 ## Forge protection
 
-The policy is forge-neutral: `git.protection.default` applies to `git.releaseBranch` and
-`git.integrationBranch`, and `git.protection.branches.<name>` overrides keys for one branch (or adds
+Protection is not C++-specific: `protect` here is `scripts/wf_protect.py protect`, which any repo
+can run, and `${CLAUDE_PLUGIN_ROOT}/references/branch-model.md` has the model it enforces. The
+policy is forge-neutral: `git.protection.default` applies to `git.releaseBranch` and
+`git.integrationBranch`, `git.protection.release` / `.integration` hold what differs by role (merge
+methods, linear history), and `git.protection.branches.<name>` overrides keys for one branch (or adds
 another branch). The forge comes from the `origin` URL, overridable with `git.forge` (`auto` |
-`github` | `none`). Only GitHub has an adapter. For any other forge, `protect` prints the policy as a
-checklist for the user to set by hand, and no CI file is scaffolded.
+`github` | `none`). Only GitHub has an adapter; it writes one ruleset per branch (`workflows: <b>`)
+and removes a classic protection rule the ruleset replaces. For any other forge, `protect` prints
+the policy as a checklist for the user to set by hand, and no CI file is scaffolded.
 
 On GitHub, this changes the live repo, outside the working tree. **Confirm every time**:
 
-1. `protect` (no `--apply`) shows, per branch, the diff from the live protection to the policy. With
+1. `protect` (no `--apply`) shows, per branch, the diff from the live ruleset to the policy. With
    `requiredChecks: "auto"` (the default) the required checks are the GitHub Actions checks that
    reported on the branch's head, so a branch CI never ran on is an error, not an empty list. An
    explicit list is warned about when one of its checks never reported. It writes nothing.
@@ -139,11 +143,12 @@ On GitHub, this changes the live repo, outside the working tree. **Confirm every
 
 The defaults, and why: PR required; required checks = every CI check that reported on the branch;
 no force push; no deletion; **0 required approvals**, because the owner opens PRs from their own
-account and GitHub does not let an author approve; **no linear history on main**, because a release
-is a merge commit; rules apply to admins too. A squash merge defaults to the **PR title and
-description** (`squashMessage: "pr"`), so when a PR squashes (`/core:pull-request` decides), the
+account and GitHub does not let an author approve; **main takes merge commits only and is not
+linear**, because a release is a merge commit and a squashed or rebased release makes the branches
+drift; **dev takes squash or rebase and is linear**; rules apply to admins too. A squash or merge
+commit defaults to the **PR title and description** (`squashMessage` / `mergeMessage: "pr"`), so the
 branch's commit messages, with their `Plan-Id` / `Task-Id` trailers and their intermediate states,
-stay off the integration branch.
+stay off the protected branches.
 
 ## Hard rules
 

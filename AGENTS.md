@@ -82,6 +82,12 @@ entry: `build(core): release 0.6.0 Since 0.5.3: <what changed, user-visible firs
 A plugin *installed* from the marketplace is a cache and does not track source edits — that needs
 `/plugin marketplace update`. Use `--plugin-dir` while iterating.
 
+Branches follow `plugins/core/references/branch-model.md`, with `next_release` as the integration
+branch (`.claude/workflows.json`). The marketplace installs from `main`, so `main` is what users
+get: work lands on `next_release` through squash or rebase PRs, the bump commit goes there through a
+PR too, and a release is the `next_release` → `main` PR merged as a merge commit, then tagged
+`vX.Y.Z` on `main`. Both branches are protected; nothing is pushed to them directly.
+
 ### 3. Configuration is layered, and lives in files
 
 Three layers, deep-merged, later wins: plugin defaults → `~/.claude/workflows.json` →

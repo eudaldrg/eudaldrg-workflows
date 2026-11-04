@@ -36,16 +36,18 @@ Two things are forge-specific, and both go through an adapter:
 - **CI file.** Kept a thin wrapper: install a toolchain, then call `cmake`/`ctest` or
   `pre-commit run`. All logic lives in the repo's scripts, which is what makes another adapter
   cheap and keeps CI and local hooks from disagreeing.
-- **Branch protection.** `git.protection` is a neutral policy: one `default` applied to the
-  release and integration branches by their configured names, plus per-branch overrides in
-  `branches` (`requirePR`, `approvals`,
-  `requiredChecks`, `allowForcePush`, `allowDeletion`, `linearHistory`, `enforceAdmins`); the
-  adapter translates it into that forge's API. One repo-wide key sits beside them:
-  `squashMessage` (`"pr"` by default) makes a squash merge default to the PR's title and
-  description instead of the branch's commit messages, so per-commit trailers like `Plan-Id` and
-  `Task-Id` stay on the feature branch and never reach the integration branch.
+- **Branch protection.** Not C++-specific; it lives in `scripts/wf_protect.py` and
+  `references/branch-model.md`, and `protect` here is the same command. `git.protection` is a
+  neutral policy: one `default` applied to the release and integration branches by their configured
+  names, `release` / `integration` for what differs by role, plus per-branch overrides in `branches`
+  (`requirePR`, `approvals`, `requiredChecks`, `allowForcePush`, `allowDeletion`, `linearHistory`,
+  `enforceAdmins`, `mergeMethods`); the adapter translates it into that forge's API (GitHub:
+  one ruleset per branch). Two repo-wide keys sit beside them: `squashMessage` and `mergeMessage`
+  (`"pr"` by default) make a squash or merge commit default to the PR's title and description
+  instead of the branch's commit messages, so per-commit trailers like `Plan-Id` and `Task-Id` stay
+  on the feature branch.
 
-Only GitHub has an adapter. Others would be one function pair each (CI body, protection payload),
+Only GitHub has an adapter. Others would be one function pair each (CI body, protection rules),
 added once there is a live repo to test them against. Until then they get a printed checklist and no
 CI file, rather than an untested one.
 
@@ -141,13 +143,15 @@ stale test binary running.
 
 ## Branch model and protection defaults
 
-`feature/<slug>` → PR into the integration branch (`dev`), merged by the owner by the method the PR recommends (`/core:pull-request`); release =
-integration → release branch (`main`) as a merge commit, then tag `vX.Y.Z` there. Defaults for both
-protected branches: PR required, required checks = every CI check that reported on the branch
-(the repo owns its CI, so its job names are read from a run, not predicted), no force push, no
-deletion, admins included, **0 approvals** (the owner's own PRs could never merge otherwise; "the
-owner reviews" is an AGENTS.md rule, not a forge setting), and **no linear history** (it would
-reject the release merge commit).
+The model is `references/branch-model.md`: `feature/<slug>` → PR into the integration branch
+(`dev`), squash or rebase as the PR recommends (`/core:pull-request`); release = integration →
+release branch (`main`) as a merge commit, then tag `vX.Y.Z` there. Defaults for both protected
+branches: PR required, required checks = every CI check that reported on the branch (the repo owns
+its CI, so its job names are read from a run, not predicted), no force push, no deletion, admins
+included, **0 approvals** (the owner's own PRs could never merge otherwise; "the owner reviews" is an
+AGENTS.md rule, not a forge setting). By role: `dev` allows squash and rebase and requires linear
+history; `main` allows merge commits only and **no linear history** (it would reject the release
+merge commit).
 
 ## implement-plan and /simplify
 

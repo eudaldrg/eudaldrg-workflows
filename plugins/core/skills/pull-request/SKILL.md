@@ -32,7 +32,9 @@ Before opening, read what the branch adds: `git log --oneline <base>..HEAD` and
 - Feature work: the integration branch (`git.integrationBranch`, often `dev`), from the commit the
   branch was cut from. Cut new work from the freshly fetched remote base, never a stale local one.
 - A release: integration branch → release branch (`git.releaseBranch`, often `main`), only when the
-  owner says so.
+  owner says so. `${CLAUDE_PLUGIN_ROOT}/references/branch-model.md` has the model and its reasons.
+- A hotfix: a branch from the release branch, PR into it, then the same fix as a normal PR into the
+  integration branch.
 - If the PR a change belongs to is already merged, the change is a new branch and a new PR. Check
   with `gh pr view <branch> --json state` before pushing more commits to an existing branch.
 
@@ -48,7 +50,23 @@ Decide from the commits as they will land, and state it in the description (sect
 | Commits that carry plan structure: `Plan-Id` / `Task-Id` trailers, `T1:`-style subjects, one commit per plan task | **squash** | Plan structure is how the work was run, not what changed. It stays on the feature branch. |
 | Integration → release | **merge commit** | The release branch keeps the integration history and the tag marks the merge. |
 
-When in doubt between rebase and squash, squash. A plan run almost always squashes.
+When in doubt between rebase and squash, squash. A plan run almost always squashes. A release is
+never squashed or rebased, whatever its commits look like: either one writes commits the integration
+branch does not have, and the two branches drift.
+
+Then check what the forge will actually accept, before writing the description:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/wf_protect.py" methods --base <base>
+```
+
+- The recommended method is not in `allowed`: do not recommend another one in its place. Tell the
+  owner which setting blocks it (the output names it) and that `wf_protect.py protect` shows the fix.
+  For a release, a squash-only or linear-history release branch is the problem, not the PR.
+- The squash message is the concatenated commits rather than the PR title and description: say so
+  when recommending squash, because the forge's proposed message will carry every commit message and
+  trailer unless the owner replaces it. Same for a merge commit whose message is the forge default.
+- `unknown` (no forge adapter, or `gh` unusable): recommend from the table and say it is unchecked.
 
 ## 4. Title and description
 
@@ -81,6 +99,8 @@ gh pr create --base <base> --head <branch> --title "<title>" --body-file <file>
 
 ## Mechanics and gotchas
 
+- **Direct pushes to a protected branch fail** once its ruleset requires a PR, the owner's included.
+  Everything, version bumps too, goes through a branch and a PR.
 - **Push, open and merge need the owner's go-ahead** each time, unless the project config says
   otherwise for plan runs (`git.askBeforePush`, `git.askBeforePR`).
 - **Check the PR's state before pushing more commits** (`gh pr view <branch> --json state,mergedAt`).

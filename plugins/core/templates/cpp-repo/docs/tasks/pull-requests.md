@@ -19,11 +19,14 @@ is in the workflows plugin's `pull-request` skill.
 - A release is a PR from `{{integration_branch}}` into `{{release_branch}}`, merged as a **merge
   commit** (not squashed, so `{{release_branch}}` keeps the integration history), then tagged
   `vX.Y.Z` on `{{release_branch}}`. Only when the owner says so.
+- A hotfix is a branch from `{{release_branch}}`, a PR into it (merge commit), then the same fix as
+  a normal PR into `{{integration_branch}}`.
 - `{{release_branch}}` and `{{integration_branch}}` are protected on the forge: PR required, the CI
   checks required, no force push, no deletion. No approval count is required, because the owner
   opens PRs from their own account and cannot approve them; "the owner reviews" is a rule here, not a
-  forge setting. Linear history is not required on `{{release_branch}}`: it would reject the release
-  merge commit.
+  forge setting. `{{integration_branch}}` accepts squash and rebase only and is linear;
+  `{{release_branch}}` accepts merge commits only and is not linear, because a squashed or rebased
+  release would leave the two branches with different commits.
 
 ## Before pushing
 
