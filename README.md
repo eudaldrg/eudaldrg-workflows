@@ -17,7 +17,7 @@ Design choices that run through it:
 - **Plan, then execute from git.** Work is planned as a task graph in a plan file, then carried out
   one commit per task with trailers that let an interrupted run resume from git history alone.
 - **Layered configuration in files.** Plugin defaults, then `~/.claude/workflows.json`, then
-  `<repo>/.claude/workflows.json`. Project config is committed, so it is reviewable and works in CI.
+  `<repo>/.config/workflows.json`. Project config is committed, so it is reviewable and works in CI.
 - **Hooks detect and report, they never edit.** Any change to a working tree comes from an explicit
   skill invocation.
 - **Generated files declare themselves.** Generated lint configs carry a provenance header and

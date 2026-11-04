@@ -1,6 +1,6 @@
 ---
 name: setup-cpp-repo
-description: Set up a C++ repo with the shared defaults — CMake skeleton with GCC/Clang/MSVC warnings, sanitizers and GoogleTest, Python check scripts, a two-stage pre-commit config, CI on Linux and Windows, the feature→dev→main branch model and its forge protection — with per-repo overrides in .claude/workflows.json. Use when starting a C++ repo, adding quality gates or CI to one, re-pointing an existing repo at the shared setup, when its generated pre-commit config drifts, or whenever a C++ repo's CI workflow (.github/workflows/ci.yml) is created or edited.
+description: Set up a C++ repo with the shared defaults — CMake skeleton with GCC/Clang/MSVC warnings, sanitizers and GoogleTest, Python check scripts, a two-stage pre-commit config, CI on Linux and Windows, the feature→dev→main branch model and its forge protection — with per-repo overrides in .config/workflows.json. Use when starting a C++ repo, adding quality gates or CI to one, re-pointing an existing repo at the shared setup, when its generated pre-commit config drifts, or whenever a C++ repo's CI workflow (.github/workflows/ci.yml) is created or edited.
 argument-hint: "[status | scaffold | generate | check | protect] [path-to-repo]"
 allowed-tools: Read, Write, Edit, Bash, Glob
 ---
@@ -25,8 +25,8 @@ python3 "$S" protect  [--project <path>] [--branch B ...] [--apply] [--json]
 
 | Kind | Files | After writing |
 |---|---|---|
-| **Scaffolded once** | `CMakeLists.txt`, `cmake/ProjectSettings.cmake`, `CMakePresets.json`, `tests/smoke_test.cpp`, the CI workflow (`.github/workflows/ci.yml`, GitHub only), `scripts/check_build.py`, `scripts/run_sanitizers.py`, `scripts/with_memory_cap.py`, `docs/tasks/testing.md`, `docs/tasks/pull-requests.md`, the AGENTS.md sections, `build/` in `.gitignore`, missing keys in `.claude/workflows.json` | The repo owns them. `scaffold` never overwrites an existing file; it says `keep`. |
-| **Generated** | `.pre-commit-config.yaml` | Kept in sync from `.claude/workflows.json`. Provenance header, drift check, never edited by hand. |
+| **Scaffolded once** | `CMakeLists.txt`, `cmake/ProjectSettings.cmake`, `CMakePresets.json`, `tests/smoke_test.cpp`, the CI workflow (`.github/workflows/ci.yml`, GitHub only), `scripts/check_build.py`, `scripts/run_sanitizers.py`, `scripts/with_memory_cap.py`, `docs/tasks/testing.md`, `docs/tasks/pull-requests.md`, the AGENTS.md sections, `build/` in `.gitignore`, missing keys in `.config/workflows.json` | The repo owns them. `scaffold` never overwrites an existing file; it says `keep`. |
+| **Generated** | `.pre-commit-config.yaml` | Kept in sync from `.config/workflows.json`. Provenance header, drift check, never edited by hand. |
 
 `.clang-format` / `.clang-tidy` are `/core:sync-lint-rules`' job; run it as part of setup.
 
@@ -34,7 +34,7 @@ python3 "$S" protect  [--project <path>] [--branch B ...] [--apply] [--json]
 
 1. `status`. It shows the forge it detected, what `scaffold` would write or keep, and the drift
    state of the generated files. Report it to the user, especially the forge line.
-2. Settle per-repo overrides **before** writing, in the repo's `.claude/workflows.json`: the
+2. Settle per-repo overrides **before** writing, in the repo's `.config/workflows.json`: the
    compiler floor (`cpp.repo.compilerFloor`), the CI matrix (`cpp.repo.ci.matrix`, every gcc/clang
    cell at or above the floor), TSan (`cpp.repo.checks.sanitizers.tsan`, off by default), cppcheck
    (on), the memory cap (off; Linux only). Scaffold inputs for the first CI file, all empty by
@@ -106,7 +106,7 @@ Show the user the diff first.
 
 | Drift | Remedy |
 |---|---|
-| hand-edited since generation | Work out what the edit wanted and express it in `.claude/workflows.json` (or, if it is a gap every repo has, in this plugin's generator), then regenerate. `generate` refuses to overwrite a hand-edit without `--force`. |
+| hand-edited since generation | Work out what the edit wanted and express it in `.config/workflows.json` (or, if it is a gap every repo has, in this plugin's generator), then regenerate. `generate` refuses to overwrite a hand-edit without `--force`. |
 | template moved on | The plugin's generator changed (`templates/cpp-repo/VERSION`). Regenerate and show the diff. |
 | config changed, never regenerated | Regenerate. |
 | missing / not generated | `generate --apply`; a pre-existing hand-written file needs `--force` after the user has seen the diff. |
@@ -159,5 +159,5 @@ stay off the protected branches.
 - Never commit, push, merge or tag. Setup ends with a working tree the user reviews.
 - Never weaken a check to make the dry run pass; fix the template or report it.
 - Nothing project-specific goes into this plugin's templates; per-repo choices live in that repo's
-  `.claude/workflows.json`.
+  `.config/workflows.json`.
 - Never mutate a repo from a hook. Drift is detected and reported; regeneration is this skill.

@@ -40,7 +40,7 @@ class RepoCase(unittest.TestCase):
         self.tmp.cleanup()
 
     def config(self, data):
-        path = self.root / ".claude" / "workflows.json"
+        path = self.root / ".config" / "workflows.json"
         path.parent.mkdir(exist_ok=True)
         path.write_text(json.dumps(data), encoding="utf-8")
 
@@ -113,7 +113,7 @@ class ScaffoldTest(RepoCase):
     def test_project_config_gets_missing_keys_only(self):
         self.config({"cpp": {"enabled": True}, "implement": {"checkTimeoutSeconds": 60}})
         self.run_cli("scaffold", "--apply")
-        data = json.loads((self.root / ".claude/workflows.json").read_text(encoding="utf-8"))
+        data = json.loads((self.root / ".config/workflows.json").read_text(encoding="utf-8"))
         self.assertEqual(data["implement"], {"checkTimeoutSeconds": 60})
         self.assertEqual(data["git"], {"protectedBranches+": ["dev"]})
 

@@ -52,7 +52,7 @@ that branch protection requires are the real gate.
 clang-format and clang-tidy are pinned in `.pre-commit-config.yaml` and installed by pre-commit
 from PyPI, so every machine and CI run uses the same binaries regardless of what the system has.
 cppcheck is a system tool locally (`apt install cppcheck`, `winget install cppcheck`). CI builds the
-version pinned in `.claude/workflows.json` (`cpp.repo.tools.cppcheck`) from source, because
+version pinned in `.config/workflows.json` (`cpp.repo.tools.cppcheck`) from source, because
 versions disagree on findings; the `cppcheck-version` hook warns when the local one differs. Bump
 the pin together with the local version.
 

@@ -52,7 +52,7 @@ without it still resolves by filename, it just gets no staleness signal and no r
 
 The title is the H1 and the summary is the first paragraph. Neither is ever stored twice.
 
-Nothing about an individual document belongs in `.claude/workflows.json`. That file says only *where to
+Nothing about an individual document belongs in `.config/workflows.json`. That file says only *where to
 look* (`knowledge.docsDir`) and *whether to consult the shared set* (`knowledge.consultShared`).
 
 ## Staleness carries no stored state
